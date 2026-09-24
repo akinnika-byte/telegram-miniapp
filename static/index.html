@@ -137,6 +137,7 @@
   .badge { display: inline-block; font-size: 11px; font-weight: 700; padding: 3px 9px; border-radius: 9px; }
   .badge.ok { background: var(--ok-bg); color: var(--ok); }
   .badge.bad { background: var(--bad-bg); color: var(--bad); }
+  .badge.corr { background: rgba(255,184,77,.18); color: var(--warn); }
   .hist { background: var(--card); border-radius: 16px; padding: 14px 16px; margin-bottom: 10px; }
   .hist .h { display: flex; justify-content: space-between; align-items: center; }
   .hist .h b { font-size: 16px; }
@@ -252,6 +253,7 @@
 <!-- Форма путевого -->
 <div class="screen" id="scr-form">
   <div class="topbar"><button class="link" id="form-back">← Меню</button><span></span></div>
+  <h2 id="form-title">Новый путевой</h2>
   <div class="card vehicle">
     <div class="plate" id="v-plate">—</div>
     <div class="meta">
@@ -314,7 +316,7 @@
 
 <script>
 const tg = window.Telegram && window.Telegram.WebApp ? window.Telegram.WebApp : null;
-let session = null, vehicle = null, pin = "";
+let session = null, vehicle = null, pin = "", editingId = null;
 
 const $ = (id) => document.getElementById(id);
 const api = async (path, opts = {}) => {
@@ -405,17 +407,23 @@ function openMenu() {
   $("m-new").classList.toggle("disabled", noNorm);
   show("scr-menu");
 }
-$("m-new").addEventListener("click", () => {
+$("m-new").addEventListener("click", () => openForm(null));
+
+function openForm(rec) {
+  editingId = rec ? rec.id : null;
+  $("form-title").textContent = rec ? `Исправление путевого №${rec.waybill_no}` : "Новый путевой";
+  $("btn-check").textContent = rec ? "Проверить и сохранить" : "Проверить и отправить";
   $("v-plate").textContent = vehicle.plate;
   $("v-model").textContent = vehicle.model || "—";
   $("v-norm").textContent = vehicle.fuel_norm;
   $("v-moto").textContent = vehicle.motohour_norm;
-  $("f-date").value = new Date().toISOString().slice(0, 10);
-  $("f-waybill").value = "";
-  ["km_start","km_end","km_empty","km_loaded","tank_start","fuel_in","tank_end","fuel_spent","motohours"]
-    .forEach(f => $("f-" + f).value = "");
+  $("f-waybill").value = rec ? rec.waybill_no : "";
+  $("f-date").value = (rec && rec.waybill_date)
+    ? String(rec.waybill_date).slice(0, 10)
+    : new Date().toISOString().slice(0, 10);
+  FIELD_IDS.forEach(f => $("f-" + f).value = rec && rec[f] != null ? rec[f] : "");
   show("scr-form");
-});
+}
 $("m-history").addEventListener("click", loadHistory);
 $("m-vehicle").addEventListener("click", loadVehicle);
 $("m-profile").addEventListener("click", loadProfile);
@@ -425,21 +433,28 @@ $("veh-back").addEventListener("click", openMenu);
 $("prof-back").addEventListener("click", openMenu);
 
 /* ---------- Мои путёвки ---------- */
+let historyRows = [];
+
 async function loadHistory() {
   show("scr-history"); $("hist-list").innerHTML = '<div class="spinner"></div>';
   try {
     const rows = await api("/api/driver/waybills");
+    historyRows = rows;
     if (!rows.length) { $("hist-list").innerHTML = '<div class="empty">Путёвок пока нет</div>'; return; }
     $("hist-list").innerHTML = rows.map(r => `
       <div class="hist">
         <div class="h"><b>Путевой №${esc(r.waybill_no)}</b>
-          <span class="badge ${r.is_ok ? "ok" : "bad"}">${r.is_ok ? "OK" : "РАСХОЖДЕНИЕ"}</span></div>
-        <div class="muted" style="font-size:12px;margin-top:4px">${esc(r.period_name)} · ${dstr(r.created_at)}</div>
+          <span>${r.is_corrected ? '<span class="badge corr">ИСПРАВЛЕН</span> ' : ""}<span class="badge ${r.is_ok ? "ok" : "bad"}">${r.is_ok ? "OK" : "РАСХОЖДЕНИЕ"}</span></span></div>
+        <div class="muted" style="font-size:12px;margin-top:4px">${esc(r.period_name)} · ${dstr(r.waybill_date || r.created_at)}</div>
         <div class="kv">
           <span>Пробег: <b>${nf(r.km_total_odo)} км</b></span>
           <span>Топливо: <b>${nf(r.fuel_spent)} л</b></span>
         </div>
+        <button class="btn ghost" style="height:44px;margin-top:12px" data-edit="${r.id}">✏️ Изменить</button>
       </div>`).join("");
+    $("hist-list").querySelectorAll("[data-edit]").forEach(b =>
+      b.addEventListener("click", () =>
+        openForm(historyRows.find(x => String(x.id) === b.dataset.edit))));
   } catch (e) { $("hist-list").innerHTML = `<div class="empty">${esc(e.message)}</div>`; }
 }
 
@@ -503,25 +518,27 @@ $("btn-check").addEventListener("click", async () => {
   const payload = { plate: vehicle.plate, waybill_no: $("f-waybill").value.trim(), date: $("f-date").value };
   FIELD_IDS.forEach(f => payload[f] = num("f-" + f));
   if (!payload.waybill_no) return toast("Укажите номер путевого листа");
+  if (editingId) payload.id = editingId;
 
   btn.disabled = true; btn.textContent = "Проверяем…";
   try {
     const data = await api("/api/waybill/save", { method: "POST", body: JSON.stringify(payload) });
     buzz("success");
-    renderResult(data.result, payload.waybill_no);
+    renderResult(data.result, payload.waybill_no, data.is_corrected);
     show("scr-result");
   } catch (e) {
     buzz("error");
     toast(e.message);
   } finally {
-    btn.disabled = false; btn.textContent = "Проверить и отправить";
+    btn.disabled = false;
+    btn.textContent = editingId ? "Проверить и сохранить" : "Проверить и отправить";
   }
 });
 function setVal(id, text, cls) {
   const el = $(id); el.textContent = text; el.classList.remove("ok", "bad");
   if (cls) el.classList.add(cls);
 }
-function renderResult(d, waybillNo) {
+function renderResult(d, waybillNo, corrected) {
   setVal("r-p1", d.p1 + " л"); setVal("r-p2", d.p2 + " л");
   setVal("r-h", d.h + " л"); setVal("r-p", d.fuel_calc + " л");
   setVal("r-odo", nf(d.km_total_odo) + " км", d.km_ok ? "ok" : "bad");
@@ -534,10 +551,12 @@ function renderResult(d, waybillNo) {
 
   const st = $("res-status");
   st.className = "status " + (d.is_ok ? "ok" : "bad");
-  $("res-status-big").textContent = d.is_ok ? "✔ Отправлено" : "⚠ Расхождения";
-  $("res-status-small").textContent = d.is_ok
-    ? `Путевой №${waybillNo} сохранён на сервере`
-    : `Путевой №${waybillNo} сохранён, но проверьте данные`;
+  const action = corrected ? "Исправлено" : "Отправлено";
+  $("res-status-big").textContent = d.is_ok ? `✔ ${action}` : "⚠ Расхождения";
+  $("res-status-small").textContent = corrected
+    ? `Путевой №${waybillNo} исправлен и сохранён`
+    : (d.is_ok ? `Путевой №${waybillNo} сохранён на сервере`
+               : `Путевой №${waybillNo} сохранён, но проверьте данные`);
 }
 $("btn-done").addEventListener("click", openMenu);
 $("btn-again").addEventListener("click", () => $("m-new").click());
