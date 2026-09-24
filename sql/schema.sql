@@ -22,6 +22,8 @@ create table if not exists vehicles (
     engine_no       text,
     chassis_no      text,
     driver_name     text,
+    driver_rank     text,
+    driver_position text,
     driver_license  text,
     sts_expires              date,                         -- СТС
     diagnostic_card_expires  date,                         -- диагностическая карта
@@ -180,6 +182,8 @@ alter table vehicles add column if not exists vin            text;
 alter table vehicles add column if not exists engine_no      text;
 alter table vehicles add column if not exists chassis_no     text;
 alter table vehicles add column if not exists driver_name    text;
+alter table vehicles add column if not exists driver_rank    text;
+alter table vehicles add column if not exists driver_position text;
 alter table vehicles add column if not exists driver_license text;
 alter table vehicles add column if not exists sts_expires             date;
 alter table vehicles add column if not exists diagnostic_card_expires date;

@@ -167,7 +167,7 @@ const dstr = (s) => s ? new Date(s).toLocaleDateString("ru-RU") : "—";
 const toast = (m) => { const t = $("toast"); t.textContent = m; t.classList.add("show");
   clearTimeout(t._t); t._t = setTimeout(() => t.classList.remove("show"), 2600); };
 
-const isTech = () => session && session.role === "technician";
+const isTech = () => session && (session.role === "technician" || session.role === "commander");
 
 async function boot() {
   if (!tg || !tg.initData) {
@@ -412,7 +412,9 @@ function openDriverCard(plate) {
       <div class="card" style="padding:16px">
         <div class="kv" style="grid-template-columns:1fr">
           <div>ФИО: <b>${esc(r.driver_name || "—")}</b></div>
-          <div>Номер прав: <b>${esc(r.driver_license || "—")}</b></div>
+          <div>Звание: <b>${esc(r.driver_rank || "—")}</b></div>
+          <div>Должность: <b>${esc(r.driver_position || "—")}</b></div>
+          <div>Права: <b>${esc(r.driver_license || "—")}</b></div>
           <div>Закреплённая техника: <b>${esc(r.plate)} · ${esc(r.model || "")}</b></div>
           <div>Закрыто документации: <b>${r.waybill_count}</b></div>
         </div>
@@ -434,7 +436,9 @@ const FORM_FIELDS = [
   ["motohour_norm", "Норма, л/моточас", "decimal"],
   ["tank_capacity", "Объём бака, л", "decimal"],
   ["driver_name", "ФИО водителя", "text"],
-  ["driver_license", "Номер прав", "text"],
+  ["driver_rank", "Звание", "text"],
+  ["driver_position", "Должность", "text"],
+  ["driver_license", "Права (категории)", "text"],
   ["vin", "VIN", "text"],
   ["engine_no", "Двигатель", "text"],
   ["chassis_no", "Шасси", "text"],

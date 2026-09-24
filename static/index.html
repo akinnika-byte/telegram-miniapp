@@ -408,6 +408,8 @@ async function loadVehicle() {
       <div class="card">
         <h3 style="margin:0 0 8px;font-size:14px;color:var(--hint)">👤 Водитель</h3>
         ${vehRow("ФИО", v.driver_name)}
+        ${vehRow("Звание", v.driver_rank)}
+        ${vehRow("Должность", v.driver_position)}
         ${vehRow("Права", v.driver_license)}
       </div>
       <div class="card">
@@ -428,7 +430,9 @@ async function loadProfile() {
     $("prof-body").innerHTML = `
       <div class="card">
         ${vehRow("ФИО", p.full_name)}
-        ${vehRow("Номер прав", p.license_number)}
+        ${vehRow("Звание", p.rank)}
+        ${vehRow("Должность", p.position)}
+        ${vehRow("Права", p.license_number)}
         ${vehRow("Закреплённая техника", p.plate + (p.model ? " · " + p.model : ""))}
         ${vehRow("Закрыто документации", String(p.closed_docs))}
       </div>`;

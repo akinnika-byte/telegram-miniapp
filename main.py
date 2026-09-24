@@ -73,6 +73,8 @@ class VehicleIn(BaseModel):
     engine_no: Optional[str] = None
     chassis_no: Optional[str] = None
     driver_name: Optional[str] = None
+    driver_rank: Optional[str] = None
+    driver_position: Optional[str] = None
     driver_license: Optional[str] = None
     sts_expires: Optional[str] = None
     diagnostic_card_expires: Optional[str] = None
@@ -327,6 +329,8 @@ def driver_profile(user: dict = Depends(current_user)) -> dict:
     return {
         "plate": plate,
         "full_name": (v or {}).get("driver_name"),
+        "rank": (v or {}).get("driver_rank"),
+        "position": (v or {}).get("driver_position"),
         "license_number": (v or {}).get("driver_license"),
         "model": (v or {}).get("model"),
         "closed_docs": n,
@@ -718,6 +722,8 @@ def admin_vehicle_save(payload: VehicleIn, user: dict = Depends(require_admin)) 
         "engine_no": payload.engine_no,
         "chassis_no": payload.chassis_no,
         "driver_name": payload.driver_name,
+        "driver_rank": payload.driver_rank,
+        "driver_position": payload.driver_position,
         "driver_license": payload.driver_license,
         "sts_expires": parse_optional_date(payload.sts_expires),
         "diagnostic_card_expires": parse_optional_date(payload.diagnostic_card_expires),
@@ -734,6 +740,7 @@ def admin_vehicle_save(payload: VehicleIn, user: dict = Depends(require_admin)) 
                     motohour_norm=%(motohour_norm)s, tank_capacity=%(tank_capacity)s,
                     is_active=%(is_active)s, vin=%(vin)s, engine_no=%(engine_no)s,
                     chassis_no=%(chassis_no)s, driver_name=%(driver_name)s,
+                    driver_rank=%(driver_rank)s, driver_position=%(driver_position)s,
                     driver_license=%(driver_license)s, sts_expires=%(sts_expires)s,
                     diagnostic_card_expires=%(diagnostic_card_expires)s,
                     red_stripe_expires=%(red_stripe_expires)s, updated_at=now()
@@ -751,12 +758,13 @@ def admin_vehicle_save(payload: VehicleIn, user: dict = Depends(require_admin)) 
                 insert into vehicles
                     (plate, model, fuel_norm, motohour_norm, tank_capacity,
                      is_active, vin, engine_no, chassis_no, driver_name,
-                     driver_license, sts_expires, diagnostic_card_expires,
-                     red_stripe_expires)
+                     driver_rank, driver_position, driver_license,
+                     sts_expires, diagnostic_card_expires, red_stripe_expires)
                 values
                     (%(plate)s, %(model)s, %(fuel_norm)s, %(motohour_norm)s,
                      %(tank_capacity)s, %(is_active)s, %(vin)s, %(engine_no)s,
-                     %(chassis_no)s, %(driver_name)s, %(driver_license)s,
+                     %(chassis_no)s, %(driver_name)s, %(driver_rank)s,
+                     %(driver_position)s, %(driver_license)s,
                      %(sts_expires)s, %(diagnostic_card_expires)s,
                      %(red_stripe_expires)s)
                 on conflict (plate) do update set
@@ -765,6 +773,8 @@ def admin_vehicle_save(payload: VehicleIn, user: dict = Depends(require_admin)) 
                     tank_capacity=excluded.tank_capacity, is_active=excluded.is_active,
                     vin=excluded.vin, engine_no=excluded.engine_no,
                     chassis_no=excluded.chassis_no, driver_name=excluded.driver_name,
+                    driver_rank=excluded.driver_rank,
+                    driver_position=excluded.driver_position,
                     driver_license=excluded.driver_license,
                     sts_expires=excluded.sts_expires,
                     diagnostic_card_expires=excluded.diagnostic_card_expires,
@@ -787,11 +797,13 @@ def admin_drivers(user: dict = Depends(require_admin)) -> list:
     with db() as conn:
         return conn.execute(
             """
-            select v.id, v.plate, v.model, v.driver_name, v.driver_license,
+            select v.id, v.plate, v.model, v.driver_name, v.driver_rank,
+                   v.driver_position, v.driver_license,
                    count(w.id) as waybill_count
             from vehicles v
             left join waybills w on w.vehicle_id = v.id
-            group by v.id, v.plate, v.model, v.driver_name, v.driver_license
+            group by v.id, v.plate, v.model, v.driver_name, v.driver_rank,
+                     v.driver_position, v.driver_license
             order by v.plate
             """
         ).fetchall()
