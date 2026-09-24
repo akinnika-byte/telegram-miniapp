@@ -654,6 +654,7 @@ def admin_report(period_id: int, user: dict = Depends(require_admin)) -> dict:
             "total_km": float(r["km_total_odo"]),
             "is_ok": r["is_ok"],
             "is_corrected": r["is_corrected"],
+            "waybill_date": r["waybill_date"].isoformat() if r["waybill_date"] else None,
             "author": author,
             "created_at": r["created_at"].isoformat() if r["created_at"] else None,
         })
