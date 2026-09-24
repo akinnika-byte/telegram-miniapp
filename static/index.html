@@ -1,0 +1,195 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>Telegram Mini App</title>
+  <!-- Официальный SDK Telegram Web App -->
+  <script src="https://telegram.org/js/telegram-web-app.js"></script>
+  <style>
+    :root {
+      --bg: var(--tg-theme-bg-color, #ffffff);
+      --text: var(--tg-theme-text-color, #000000);
+      --hint: var(--tg-theme-hint-color, #8b8b8b);
+      --button: var(--tg-theme-button-color, #2481cc);
+      --button-text: var(--tg-theme-button-text-color, #ffffff);
+      --secondary: var(--tg-theme-secondary-bg-color, #f1f1f1);
+      --link: var(--tg-theme-link-color, #2481cc);
+    }
+
+    * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 24px;
+      background: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      transition: background 0.2s ease, color 0.2s ease;
+    }
+
+    .card {
+      width: 100%;
+      max-width: 380px;
+      text-align: center;
+    }
+
+    .avatar {
+      width: 88px;
+      height: 88px;
+      margin: 0 auto 20px;
+      border-radius: 50%;
+      background: var(--secondary);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 40px;
+      overflow: hidden;
+    }
+
+    .avatar img { width: 100%; height: 100%; object-fit: cover; }
+
+    h1 {
+      font-size: 24px;
+      margin: 0 0 8px;
+      font-weight: 700;
+    }
+
+    .subtitle {
+      margin: 0 0 24px;
+      color: var(--hint);
+      font-size: 15px;
+      line-height: 1.4;
+    }
+
+    .info {
+      background: var(--secondary);
+      border-radius: 14px;
+      padding: 16px;
+      margin-bottom: 24px;
+      text-align: left;
+      font-size: 14px;
+    }
+
+    .info .row {
+      display: flex;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 6px 0;
+    }
+
+    .info .row + .row { border-top: 1px solid rgba(128, 128, 128, 0.15); }
+    .info .label { color: var(--hint); }
+    .info .value { font-weight: 600; text-align: right; word-break: break-word; }
+
+    button {
+      width: 100%;
+      border: none;
+      border-radius: 12px;
+      padding: 15px 16px;
+      font-size: 16px;
+      font-weight: 600;
+      cursor: pointer;
+      background: var(--button);
+      color: var(--button-text);
+      transition: opacity 0.15s ease;
+    }
+
+    button:active { opacity: 0.8; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <div class="avatar" id="avatar">👋</div>
+    <h1 id="greeting">Привет!</h1>
+    <p class="subtitle" id="subtitle">
+      Это тестовое Telegram Mini App. Открой его через бота в Telegram.
+    </p>
+
+    <div class="info" id="info"></div>
+
+    <button id="action">Продолжить</button>
+  </div>
+
+  <script>
+    const tg = window.Telegram && window.Telegram.WebApp ? window.Telegram.WebApp : null;
+
+    const els = {
+      avatar: document.getElementById("avatar"),
+      greeting: document.getElementById("greeting"),
+      subtitle: document.getElementById("subtitle"),
+      info: document.getElementById("info"),
+      action: document.getElementById("action"),
+    };
+
+    function addRow(label, value) {
+      const row = document.createElement("div");
+      row.className = "row";
+      row.innerHTML = '<span class="label"></span><span class="value"></span>';
+      row.querySelector(".label").textContent = label;
+      row.querySelector(".value").textContent = value;
+      els.info.appendChild(row);
+    }
+
+    function render() {
+      if (!tg) {
+        els.greeting.textContent = "Привет!";
+        els.subtitle.textContent =
+          "Страница открыта вне Telegram. Открой её через бота, чтобы увидеть данные профиля.";
+        els.info.remove();
+        return;
+      }
+
+      // Инициализация: сообщаем Telegram, что приложение готово, и разворачиваем на весь экран
+      tg.ready();
+      tg.expand();
+
+      const user = tg.initDataUnsafe && tg.initDataUnsafe.user ? tg.initDataUnsafe.user : null;
+
+      if (user) {
+        const name = [user.first_name, user.last_name].filter(Boolean).join(" ");
+        els.greeting.textContent = `Привет, ${user.first_name}!`;
+        els.subtitle.textContent = "Приветственная страница Mini App успешно работает.";
+        els.avatar.innerHTML = "";
+        if (user.photo_url) {
+          const img = document.createElement("img");
+          img.src = user.photo_url;
+          img.alt = name;
+          els.avatar.appendChild(img);
+        } else {
+          els.avatar.textContent = (user.first_name || "?").charAt(0).toUpperCase();
+        }
+
+        addRow("Имя", name || "—");
+        if (user.username) addRow("Username", "@" + user.username);
+        addRow("ID", String(user.id));
+        if (user.language_code) addRow("Язык", user.language_code);
+      } else {
+        els.greeting.textContent = "Привет!";
+        els.subtitle.textContent = "Mini App открыт, но данные пользователя недоступны.";
+      }
+
+      addRow("Платформа", tg.platform || "—");
+      addRow("Версия WebApp", tg.version || "—");
+      addRow("Тема", tg.colorScheme || "—");
+      addRow("initData", tg.initData ? "получена" : "пусто");
+
+      els.action.addEventListener("click", () => {
+        if (tg.HapticFeedback) tg.HapticFeedback.impactOccurred("light");
+        tg.showAlert("Backend и Mini App связаны успешно!");
+      });
+    }
+
+    // Реагируем на смену темы в Telegram
+    if (tg && tg.onEvent) {
+      tg.onEvent("themeChanged", () => location.reload());
+    }
+
+    render();
+  </script>
+</body>
+</html>
