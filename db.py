@@ -21,7 +21,9 @@ def get_pool() -> ConnectionPool:
             conninfo=DATABASE_URL,
             min_size=1,
             max_size=5,
-            kwargs={"row_factory": dict_row},
+            # prepare_threshold=None — обязательно для transaction-пулера Supabase
+            # (порт 6543): иначе prepared statements ломаются.
+            kwargs={"row_factory": dict_row, "prepare_threshold": None},
             open=True,
         )
     return _pool
