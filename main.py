@@ -46,6 +46,7 @@ class CodeIn(BaseModel):
 
 
 class WaybillIn(BaseModel):
+    id: Optional[int] = None          # если задан — редактируем существующий
     plate: str
     waybill_no: str
     date: Optional[str] = None
@@ -355,9 +356,10 @@ def driver_waybills(user: dict = Depends(current_user)) -> list:
     with db() as conn:
         return conn.execute(
             """
-            select w.id, w.waybill_no, w.plate, w.created_at,
-                   w.km_total_odo, w.fuel_in, w.fuel_spent, w.fuel_calc,
-                   w.tank_start, w.tank_end, w.motohours, w.is_ok,
+            select w.id, w.waybill_no, w.plate, w.created_at, w.waybill_date,
+                   w.km_start, w.km_end, w.km_empty, w.km_loaded,
+                   w.tank_start, w.fuel_in, w.tank_end, w.fuel_spent, w.motohours,
+                   w.km_total_odo, w.fuel_calc, w.is_ok, w.is_corrected,
                    p.name as period_name
             from waybills w
             join periods p on p.id = w.period_id
@@ -416,9 +418,24 @@ def waybill_save(payload: WaybillIn, user: dict = Depends(current_user)) -> dict
                        f"Обратитесь к администратору.",
             )
 
+        # редактирование существующего путевого
+        record = None
+        if payload.id:
+            record = conn.execute(
+                "select * from waybills where id = %s", (payload.id,)
+            ).fetchone()
+            if not record:
+                raise HTTPException(status_code=404, detail="Путевой не найден")
+            if user.get("role") not in ADMIN_ROLES and \
+                    record["plate"] != (user.get("vehicle_plate") or ""):
+                raise HTTPException(
+                    status_code=403, detail="Можно изменить только свой путевой"
+                )
+
         dupe = conn.execute(
-            "select plate from waybills where waybill_no = %s and period_id = %s",
-            (wb_no, period["id"]),
+            "select plate from waybills "
+            "where waybill_no = %s and period_id = %s and id <> %s",
+            (wb_no, period["id"], payload.id or -1),
         ).fetchone()
         if dupe:
             raise HTTPException(
@@ -436,50 +453,93 @@ def waybill_save(payload: WaybillIn, user: dict = Depends(current_user)) -> dict
             motohour_norm=vehicle["motohour_norm"],
         )
 
-        row = conn.execute(
-            """
-            insert into waybills (
-                period_id, vehicle_id, plate, model, waybill_no,
-                km_start, km_end, km_empty, km_loaded,
-                tank_start, fuel_in, tank_end, fuel_spent, motohours,
-                fuel_norm_snapshot, motohour_norm_snapshot,
-                p1, p2, h, fuel_calc,
-                km_total_odo, km_total_input, tank_end_calc,
-                km_ok, tank_ok, fuel_ok, is_ok,
-                created_by_telegram_id
-            ) values (
-                %(period_id)s, %(vehicle_id)s, %(plate)s, %(model)s, %(waybill_no)s,
-                %(km_start)s, %(km_end)s, %(km_empty)s, %(km_loaded)s,
-                %(tank_start)s, %(fuel_in)s, %(tank_end)s, %(fuel_spent)s,
-                %(motohours)s,
-                %(fuel_norm)s, %(motohour_norm)s,
-                %(p1)s, %(p2)s, %(h)s, %(fuel_calc)s,
-                %(km_total_odo)s, %(km_total_input)s, %(tank_end_calc)s,
-                %(km_ok)s, %(tank_ok)s, %(fuel_ok)s, %(is_ok)s,
-                %(tg_id)s
-            )
-            returning id, created_at
-            """,
-            {
-                **r,
-                "period_id": period["id"],
-                "vehicle_id": vehicle["id"],
-                "plate": vehicle["plate"],
-                "model": vehicle["model"],
-                "waybill_no": wb_no,
-                "tg_id": user["telegram_id"],
-            },
-        ).fetchone()
+        params = {
+            **r,
+            "period_id": period["id"],
+            "vehicle_id": vehicle["id"],
+            "plate": vehicle["plate"],
+            "model": vehicle["model"],
+            "waybill_no": wb_no,
+            "wb_date": d,
+            "tg_id": user["telegram_id"],
+        }
 
-        log_action(conn, user, "create_waybill", "waybill", row["id"],
+        if payload.id:
+            params["id"] = payload.id
+            row = conn.execute(
+                """
+                update waybills set
+                    period_id=%(period_id)s, vehicle_id=%(vehicle_id)s,
+                    plate=%(plate)s, model=%(model)s, waybill_no=%(waybill_no)s,
+                    waybill_date=%(wb_date)s,
+                    km_start=%(km_start)s, km_end=%(km_end)s,
+                    km_empty=%(km_empty)s, km_loaded=%(km_loaded)s,
+                    tank_start=%(tank_start)s, fuel_in=%(fuel_in)s,
+                    tank_end=%(tank_end)s, fuel_spent=%(fuel_spent)s,
+                    motohours=%(motohours)s,
+                    fuel_norm_snapshot=%(fuel_norm)s,
+                    motohour_norm_snapshot=%(motohour_norm)s,
+                    p1=%(p1)s, p2=%(p2)s, h=%(h)s, fuel_calc=%(fuel_calc)s,
+                    km_total_odo=%(km_total_odo)s,
+                    km_total_input=%(km_total_input)s,
+                    tank_end_calc=%(tank_end_calc)s,
+                    km_ok=%(km_ok)s, tank_ok=%(tank_ok)s, fuel_ok=%(fuel_ok)s,
+                    is_ok=%(is_ok)s,
+                    is_corrected=true, corrected_at=now(), updated_at=now()
+                where id = %(id)s
+                returning id, created_at, is_corrected
+                """,
+                params,
+            ).fetchone()
+            action = "update_waybill"
+        else:
+            row = conn.execute(
+                """
+                insert into waybills (
+                    period_id, vehicle_id, plate, model, waybill_no, waybill_date,
+                    km_start, km_end, km_empty, km_loaded,
+                    tank_start, fuel_in, tank_end, fuel_spent, motohours,
+                    fuel_norm_snapshot, motohour_norm_snapshot,
+                    p1, p2, h, fuel_calc,
+                    km_total_odo, km_total_input, tank_end_calc,
+                    km_ok, tank_ok, fuel_ok, is_ok,
+                    created_by_telegram_id
+                ) values (
+                    %(period_id)s, %(vehicle_id)s, %(plate)s, %(model)s,
+                    %(waybill_no)s, %(wb_date)s,
+                    %(km_start)s, %(km_end)s, %(km_empty)s, %(km_loaded)s,
+                    %(tank_start)s, %(fuel_in)s, %(tank_end)s, %(fuel_spent)s,
+                    %(motohours)s,
+                    %(fuel_norm)s, %(motohour_norm)s,
+                    %(p1)s, %(p2)s, %(h)s, %(fuel_calc)s,
+                    %(km_total_odo)s, %(km_total_input)s, %(tank_end_calc)s,
+                    %(km_ok)s, %(tank_ok)s, %(fuel_ok)s, %(is_ok)s,
+                    %(tg_id)s
+                )
+                returning id, created_at, is_corrected
+                """,
+                params,
+            ).fetchone()
+            action = "create_waybill"
+
+        log_action(conn, user, action, "waybill", row["id"],
                    {"plate": vehicle["plate"], "waybill_no": wb_no,
                     "period": period["name"], "is_ok": r["is_ok"]})
+
+    corrected = bool(row.get("is_corrected")) or bool(payload.id)
+    if payload.id:
+        message = ("Путевой исправлен" if r["is_ok"]
+                   else "Путевой исправлен (остались расхождения)")
+    else:
+        message = ("Путевой сохранён" if r["is_ok"]
+                   else "Путевой сохранён (есть расхождения)")
 
     return {
         "id": row["id"],
         "result": r,
         "period": period,
-        "message": "Путевой сохранён" if r["is_ok"] else "Путевой сохранён (есть расхождения)",
+        "is_corrected": corrected,
+        "message": message,
     }
 
 
@@ -593,6 +653,7 @@ def admin_report(period_id: int, user: dict = Depends(require_admin)) -> dict:
             "fuel_calc": float(r["fuel_calc"]),
             "total_km": float(r["km_total_odo"]),
             "is_ok": r["is_ok"],
+            "is_corrected": r["is_corrected"],
             "author": author,
             "created_at": r["created_at"].isoformat() if r["created_at"] else None,
         })
@@ -624,7 +685,7 @@ def admin_summary(period_id: int, user: dict = Depends(require_admin)) -> dict:
         records = conn.execute(
             """
             select id, plate, model, waybill_no, km_total_odo, fuel_in,
-                   fuel_spent, fuel_calc, is_ok
+                   fuel_spent, fuel_calc, is_ok, is_corrected
             from waybills
             where period_id = %s
             order by plate, created_at
@@ -654,6 +715,7 @@ def admin_summary(period_id: int, user: dict = Depends(require_admin)) -> dict:
             "fuel_spent": float(r["fuel_spent"]),
             "fuel_calc": float(r["fuel_calc"]),
             "is_ok": r["is_ok"],
+            "is_corrected": r["is_corrected"],
         })
 
     def sort_key(p: str):
@@ -807,3 +869,23 @@ def admin_drivers(user: dict = Depends(require_admin)) -> list:
             order by v.plate
             """
         ).fetchall()
+
+
+# ============================================================
+#   Админ: миграции схемы (идемпотентно)
+# ============================================================
+@app.post("/api/admin/migrate")
+def admin_migrate(user: dict = Depends(require_admin)) -> dict:
+    """Добавляет недостающие поля таблиц. Безопасно запускать повторно."""
+    statements = [
+        "alter table waybills add column if not exists is_corrected "
+        "boolean not null default false",
+        "alter table waybills add column if not exists corrected_at timestamptz",
+        "alter table waybills add column if not exists waybill_date date",
+        "update waybills set waybill_date = created_at::date "
+        "where waybill_date is null",
+    ]
+    with db() as conn:
+        for sql in statements:
+            conn.execute(sql)
+    return {"ok": True, "applied": len(statements)}

@@ -108,6 +108,9 @@ create table if not exists waybills (
     fuel_ok        boolean not null default false,
     is_ok          boolean not null default false,
     status         text not null default 'submitted',       -- submitted | approved | rejected
+    is_corrected   boolean not null default false,          -- путевой исправляли
+    corrected_at   timestamptz,
+    waybill_date   date,                                    -- дата путевого (для отчёта)
 
     created_by_telegram_id bigint,
     created_at    timestamptz not null default now(),
@@ -188,3 +191,8 @@ alter table vehicles add column if not exists driver_license text;
 alter table vehicles add column if not exists sts_expires             date;
 alter table vehicles add column if not exists diagnostic_card_expires date;
 alter table vehicles add column if not exists red_stripe_expires      date;
+
+alter table waybills add column if not exists is_corrected boolean not null default false;
+alter table waybills add column if not exists corrected_at timestamptz;
+alter table waybills add column if not exists waybill_date date;
+update waybills set waybill_date = created_at::date where waybill_date is null;
