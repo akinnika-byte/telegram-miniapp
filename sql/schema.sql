@@ -4,6 +4,9 @@
 --  Выполнить в Supabase → SQL Editor целиком.
 -- ============================================================
 
+-- Расширение для хеширования кодов доступа (bcrypt)
+create extension if not exists pgcrypto;
+
 -- ---------- Машины и нормы расхода ----------
 create table if not exists vehicles (
     id              bigserial primary key,
@@ -143,3 +146,18 @@ create table if not exists vehicle_state (
     current_fuel    numeric(8,1)  not null default 0,
     updated_at      timestamptz not null default now()
 );
+
+-- ============================================================
+--  Защита данных (RLS)
+--  Backend подключается как postgres — RLS обходит.
+--  Публичный API-ключ (anon) доступа к таблицам не получает.
+--  Политики не создаём: без политик доступ запрещён.
+-- ============================================================
+alter table vehicles          enable row level security;
+alter table periods           enable row level security;
+alter table app_users         enable row level security;
+alter table access_codes      enable row level security;
+alter table waybills          enable row level security;
+alter table activity_log      enable row level security;
+alter table vehicle_documents enable row level security;
+alter table vehicle_state     enable row level security;

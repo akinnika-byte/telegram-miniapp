@@ -4,7 +4,7 @@
 
     python scripts/set_admin_codes.py
 
-Коды нигде не сохраняются в открытом виде — только хеш в таблице access_codes.
+Коды в открытом виде не сохраняются — только bcrypt-хеш (pgcrypto).
 """
 
 from __future__ import annotations
@@ -17,7 +17,6 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from config import ADMIN_ROLES, ADMIN_ROLE_TITLES  # noqa: E402
 from db import db  # noqa: E402
-from security import hash_code  # noqa: E402
 
 
 def main() -> None:
@@ -44,12 +43,12 @@ def main() -> None:
             conn.execute(
                 """
                 insert into access_codes (role, code_hash, updated_at)
-                values (%s, %s, now())
+                values (%s, crypt(%s, gen_salt('bf', 10)), now())
                 on conflict (role) do update set
                     code_hash = excluded.code_hash,
                     updated_at = now()
                 """,
-                (role, hash_code(code)),
+                (role, code),
             )
 
     print("\nГотово. Обновлены роли:", ", ".join(new_codes.keys()))

@@ -28,7 +28,7 @@ from config import (
 )
 from db import db
 from periods import period_for_date
-from security import InitDataError, validate_init_data, verify_code
+from security import InitDataError, validate_init_data
 from waybill import compute
 
 app = FastAPI(title="АВТР(ПГ) — проверка путевой документации")
@@ -334,16 +334,15 @@ def admin_login(payload: CodeIn, user: dict = Depends(current_user)) -> dict:
         raise HTTPException(status_code=400, detail="Введите код доступа")
 
     with db() as conn:
-        rows = conn.execute("select role, code_hash from access_codes").fetchall()
+        row = conn.execute(
+            "select role from access_codes "
+            "where code_hash = crypt(%s, code_hash)",
+            (code,),
+        ).fetchone()
 
-    role = None
-    for row in rows:
-        if verify_code(code, row["code_hash"]):
-            role = row["role"]
-            break
-
-    if role is None:
+    if row is None:
         raise HTTPException(status_code=403, detail="Неверный код доступа")
+    role = row["role"]
 
     with db() as conn:
         conn.execute(
