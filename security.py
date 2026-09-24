@@ -11,8 +11,38 @@ from __future__ import annotations
 import hashlib
 import hmac
 import json
+import os
 import time
 from urllib.parse import parse_qsl
+
+# ============================================================
+#  Хеширование кодов доступа (pbkdf2, стандартная библиотека)
+# ============================================================
+
+_PBKDF2_ITERATIONS = 120_000
+
+
+def hash_code(code: str) -> str:
+    """Возвращает строку вида pbkdf2_sha256$iters$salt_hex$hash_hex."""
+    salt = os.urandom(16)
+    dk = hashlib.pbkdf2_hmac("sha256", code.encode("utf-8"), salt, _PBKDF2_ITERATIONS)
+    return f"pbkdf2_sha256${_PBKDF2_ITERATIONS}${salt.hex()}${dk.hex()}"
+
+
+def verify_code(code: str, stored: str) -> bool:
+    """Проверяет код против сохранённого хеша."""
+    if not stored:
+        return False
+    try:
+        algo, iters_s, salt_hex, hash_hex = stored.split("$")
+        if algo != "pbkdf2_sha256":
+            return False
+        dk = hashlib.pbkdf2_hmac(
+            "sha256", code.encode("utf-8"), bytes.fromhex(salt_hex), int(iters_s)
+        )
+        return hmac.compare_digest(dk.hex(), hash_hex)
+    except (ValueError, AttributeError):
+        return False
 
 
 class InitDataError(Exception):

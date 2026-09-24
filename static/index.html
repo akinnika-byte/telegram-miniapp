@@ -1,195 +1,440 @@
 <!DOCTYPE html>
 <html lang="ru">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-  <title>Telegram Mini App</title>
-  <!-- Официальный SDK Telegram Web App -->
-  <script src="https://telegram.org/js/telegram-web-app.js"></script>
-  <style>
-    :root {
-      --bg: var(--tg-theme-bg-color, #ffffff);
-      --text: var(--tg-theme-text-color, #000000);
-      --hint: var(--tg-theme-hint-color, #8b8b8b);
-      --button: var(--tg-theme-button-color, #2481cc);
-      --button-text: var(--tg-theme-button-text-color, #ffffff);
-      --secondary: var(--tg-theme-secondary-bg-color, #f1f1f1);
-      --link: var(--tg-theme-link-color, #2481cc);
-    }
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+<title>АВТР(ПГ) — проверка путевого</title>
+<script src="https://telegram.org/js/telegram-web-app.js"></script>
+<style>
+  :root {
+    --bg: var(--tg-theme-bg-color, #0f1420);
+    --card: var(--tg-theme-secondary-bg-color, #1b2233);
+    --text: var(--tg-theme-text-color, #e8ecf5);
+    --hint: var(--tg-theme-hint-color, #8b93a7);
+    --accent: var(--tg-theme-button-color, #4f8cff);
+    --accent-text: var(--tg-theme-button-text-color, #ffffff);
+    --border: rgba(128, 140, 170, 0.25);
+    --ok: #2ecc71;
+    --ok-bg: rgba(46, 204, 113, 0.14);
+    --bad: #ff5b5b;
+    --bad-bg: rgba(255, 91, 91, 0.14);
+  }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    background: var(--bg); color: var(--text); min-height: 100vh;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    font-size: 16px; transition: background .2s, color .2s;
+  }
+  .screen { display: none; padding: 20px 16px 32px; max-width: 520px; margin: 0 auto; }
+  .screen.active { display: block; animation: fade .25s ease; }
+  @keyframes fade { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
 
-    * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  h1 { font-size: 22px; margin: 0 0 6px; font-weight: 800; }
+  .sub { color: var(--hint); font-size: 14px; margin: 0 0 22px; line-height: 1.45; }
 
-    body {
-      margin: 0;
-      min-height: 100vh;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      padding: 24px;
-      background: var(--bg);
-      color: var(--text);
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-      transition: background 0.2s ease, color 0.2s ease;
-    }
+  .center { text-align: center; }
+  .logo { font-size: 54px; line-height: 1; margin: 24px 0 6px; }
 
-    .card {
-      width: 100%;
-      max-width: 380px;
-      text-align: center;
-    }
+  /* ---- Клавиатура кода ---- */
+  .pin-dots { display: flex; justify-content: center; gap: 14px; margin: 22px 0 8px; }
+  .dot { width: 16px; height: 16px; border-radius: 50%; background: transparent;
+         border: 2px solid var(--hint); transition: .15s; }
+  .dot.filled { background: var(--accent); border-color: var(--accent); transform: scale(1.08); }
+  .pin-error { color: var(--bad); font-size: 14px; min-height: 20px; margin: 6px 0 12px; }
+  .keypad { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; max-width: 320px; margin: 0 auto; }
+  .key {
+    height: 62px; border: none; border-radius: 16px; background: var(--card);
+    color: var(--text); font-size: 24px; font-weight: 700; cursor: pointer;
+    transition: transform .08s, background .15s;
+  }
+  .key:active { transform: scale(.94); background: var(--border); }
+  .key.wide { font-size: 18px; }
 
-    .avatar {
-      width: 88px;
-      height: 88px;
-      margin: 0 auto 20px;
-      border-radius: 50%;
-      background: var(--secondary);
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      font-size: 40px;
-      overflow: hidden;
-    }
+  /* ---- Карточки ---- */
+  .card { background: var(--card); border-radius: 18px; padding: 16px; margin-bottom: 14px; }
+  .vehicle { display: flex; align-items: center; gap: 14px; }
+  .vehicle .plate {
+    background: var(--accent); color: var(--accent-text); font-weight: 800;
+    border-radius: 12px; padding: 10px 14px; font-size: 20px; letter-spacing: 1px;
+  }
+  .vehicle .meta { font-size: 13px; color: var(--hint); line-height: 1.5; }
+  .vehicle .meta b { color: var(--text); font-weight: 600; }
 
-    .avatar img { width: 100%; height: 100%; object-fit: cover; }
+  .field { margin-bottom: 12px; }
+  .field label { display: block; font-size: 13px; color: var(--hint); margin-bottom: 5px; }
+  .field input {
+    width: 100%; height: 48px; border-radius: 12px; border: 1.5px solid var(--border);
+    background: var(--bg); color: var(--text); font-size: 17px; padding: 0 14px; outline: none;
+    transition: border-color .15s;
+  }
+  .field input:focus { border-color: var(--accent); }
+  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 0 12px; }
 
-    h1 {
-      font-size: 24px;
-      margin: 0 0 8px;
-      font-weight: 700;
-    }
+  .btn {
+    width: 100%; height: 54px; border: none; border-radius: 16px; font-size: 17px;
+    font-weight: 700; cursor: pointer; transition: transform .08s, opacity .15s;
+  }
+  .btn:active { transform: scale(.98); }
+  .btn.primary { background: var(--accent); color: var(--accent-text); }
+  .btn.ghost { background: transparent; color: var(--accent); border: 1.5px solid var(--accent); }
+  .btn:disabled { opacity: .5; }
+  .btn + .btn { margin-top: 10px; }
 
-    .subtitle {
-      margin: 0 0 24px;
-      color: var(--hint);
-      font-size: 15px;
-      line-height: 1.4;
-    }
+  /* ---- Результаты ---- */
+  .res-row { display: flex; justify-content: space-between; gap: 12px; padding: 7px 0; font-size: 15px; }
+  .res-row + .res-row { border-top: 1px solid var(--border); }
+  .res-row .l { color: var(--hint); }
+  .res-row .v { font-weight: 700; font-variant-numeric: tabular-nums; }
+  .res-group h3 { font-size: 14px; margin: 0 0 8px; color: var(--hint); font-weight: 600; }
+  .status {
+    border-radius: 16px; padding: 16px; text-align: center; font-weight: 800; font-size: 17px;
+    margin-bottom: 14px;
+  }
+  .status.ok { background: var(--ok-bg); color: var(--ok); }
+  .status.bad { background: var(--bad-bg); color: var(--bad); }
+  .v.ok { color: var(--ok); } .v.bad { color: var(--bad); }
 
-    .info {
-      background: var(--secondary);
-      border-radius: 14px;
-      padding: 16px;
-      margin-bottom: 24px;
-      text-align: left;
-      font-size: 14px;
-    }
-
-    .info .row {
-      display: flex;
-      justify-content: space-between;
-      gap: 12px;
-      padding: 6px 0;
-    }
-
-    .info .row + .row { border-top: 1px solid rgba(128, 128, 128, 0.15); }
-    .info .label { color: var(--hint); }
-    .info .value { font-weight: 600; text-align: right; word-break: break-word; }
-
-    button {
-      width: 100%;
-      border: none;
-      border-radius: 12px;
-      padding: 15px 16px;
-      font-size: 16px;
-      font-weight: 600;
-      cursor: pointer;
-      background: var(--button);
-      color: var(--button-text);
-      transition: opacity 0.15s ease;
-    }
-
-    button:active { opacity: 0.8; }
-  </style>
+  .topbar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
+  .link { color: var(--accent); font-size: 14px; background: none; border: none; cursor: pointer; padding: 6px; }
+  .toast {
+    position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%) translateY(120%);
+    background: #111; color: #fff; padding: 12px 20px; border-radius: 14px; font-size: 14px;
+    transition: transform .3s; max-width: 90%; text-align: center; z-index: 50;
+  }
+  .toast.show { transform: translateX(-50%) translateY(0); }
+  .muted { color: var(--hint); font-size: 14px; line-height: 1.5; }
+  .spinner {
+    width: 26px; height: 26px; border: 3px solid var(--border); border-top-color: var(--accent);
+    border-radius: 50%; margin: 40px auto; animation: spin 1s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+</style>
 </head>
 <body>
-  <div class="card">
-    <div class="avatar" id="avatar">👋</div>
-    <h1 id="greeting">Привет!</h1>
-    <p class="subtitle" id="subtitle">
-      Это тестовое Telegram Mini App. Открой его через бота в Telegram.
-    </p>
 
-    <div class="info" id="info"></div>
+<!-- Загрузка -->
+<div class="screen active" id="scr-loading">
+  <div class="spinner"></div>
+  <p class="muted center">Подключение к Telegram…</p>
+</div>
 
-    <button id="action">Продолжить</button>
+<!-- Вне Telegram -->
+<div class="screen" id="scr-outside">
+  <div class="center">
+    <div class="logo">🚧</div>
+    <h1>Откройте через Telegram</h1>
+    <p class="sub">Это приложение работает внутри Telegram. Откройте его из бота <b>@resourseAVTR_bot</b> — кнопка «Открыть приложение».</p>
+  </div>
+</div>
+
+<!-- Ввод кода машины -->
+<div class="screen" id="scr-pin">
+  <div class="center">
+    <div class="logo" id="pin-logo">🚚</div>
+    <h1>АВТР(ПГ)</h1>
+    <p class="sub">Введите код доступа — 4 цифры ГРЗ вашей машины</p>
+  </div>
+  <div class="pin-dots" id="pin-dots">
+    <div class="dot"></div><div class="dot"></div><div class="dot"></div><div class="dot"></div>
+  </div>
+  <div class="pin-error center" id="pin-error"></div>
+  <div class="keypad" id="keypad">
+    <button class="key" data-k="1">1</button>
+    <button class="key" data-k="2">2</button>
+    <button class="key" data-k="3">3</button>
+    <button class="key" data-k="4">4</button>
+    <button class="key" data-k="5">5</button>
+    <button class="key" data-k="6">6</button>
+    <button class="key" data-k="7">7</button>
+    <button class="key" data-k="8">8</button>
+    <button class="key" data-k="9">9</button>
+    <button class="key wide" data-k="admin">Админ</button>
+    <button class="key" data-k="0">0</button>
+    <button class="key wide" data-k="del">⌫</button>
+  </div>
+</div>
+
+<!-- Ввод кода админа -->
+<div class="screen" id="scr-admin-pin">
+  <div class="topbar"><button class="link" id="admin-back">← Назад</button><span></span></div>
+  <div class="center">
+    <div class="logo">🛠</div>
+    <h1>Вход администратора</h1>
+    <p class="sub">Введите код доступа администратора</p>
+  </div>
+  <div class="pin-dots" id="apin-dots">
+    <div class="dot"></div><div class="dot"></div><div class="dot"></div><div class="dot"></div>
+  </div>
+  <div class="pin-error center" id="apin-error"></div>
+  <div class="keypad" id="apin-keypad">
+    <button class="key" data-k="1">1</button><button class="key" data-k="2">2</button>
+    <button class="key" data-k="3">3</button><button class="key" data-k="4">4</button>
+    <button class="key" data-k="5">5</button><button class="key" data-k="6">6</button>
+    <button class="key" data-k="7">7</button><button class="key" data-k="8">8</button>
+    <button class="key" data-k="9">9</button><button class="key wide" data-k="empty"></button>
+    <button class="key" data-k="0">0</button><button class="key wide" data-k="del">⌫</button>
+  </div>
+</div>
+
+<!-- Форма путевого -->
+<div class="screen" id="scr-form">
+  <div class="topbar">
+    <button class="link" id="change-vehicle">← Сменить машину</button>
+    <button class="link" id="to-admin">Админ</button>
+  </div>
+  <div class="card vehicle">
+    <div class="plate" id="v-plate">—</div>
+    <div class="meta">
+      <div>Модель: <b id="v-model">—</b></div>
+      <div>Норма: <b id="v-norm">—</b> л/100км · <b id="v-moto">—</b> л/моточас</div>
+      <div>Отчёт: <b id="v-period">—</b></div>
+    </div>
   </div>
 
-  <script>
-    const tg = window.Telegram && window.Telegram.WebApp ? window.Telegram.WebApp : null;
+  <div class="card">
+    <div class="grid2">
+      <div class="field"><label>№ путевого листа</label><input id="f-waybill" inputmode="numeric" placeholder="напр. 123" /></div>
+      <div class="field"><label>Дата</label><input id="f-date" type="date" /></div>
+      <div class="field"><label>Начальный километраж</label><input id="f-km_start" inputmode="decimal" placeholder="0" /></div>
+      <div class="field"><label>Конечный километраж</label><input id="f-km_end" inputmode="decimal" placeholder="0" /></div>
+      <div class="field"><label>Пробег без груза, км</label><input id="f-km_empty" inputmode="decimal" placeholder="0" /></div>
+      <div class="field"><label>Пробег с грузом, км</label><input id="f-km_loaded" inputmode="decimal" placeholder="0" /></div>
+      <div class="field"><label>Бак на начало, л</label><input id="f-tank_start" inputmode="decimal" placeholder="0" /></div>
+      <div class="field"><label>Получено топлива, л</label><input id="f-fuel_in" inputmode="decimal" placeholder="0" /></div>
+      <div class="field"><label>Бак на конец, л</label><input id="f-tank_end" inputmode="decimal" placeholder="0" /></div>
+      <div class="field"><label>Затрачено топлива, л</label><input id="f-fuel_spent" inputmode="decimal" placeholder="0" /></div>
+      <div class="field"><label>Моточасы</label><input id="f-motohours" inputmode="decimal" placeholder="0" /></div>
+    </div>
+  </div>
 
-    const els = {
-      avatar: document.getElementById("avatar"),
-      greeting: document.getElementById("greeting"),
-      subtitle: document.getElementById("subtitle"),
-      info: document.getElementById("info"),
-      action: document.getElementById("action"),
-    };
+  <button class="btn primary" id="btn-check">Проверить</button>
+  <button class="btn ghost" id="btn-save" style="display:none">Отправить на сервер</button>
+</div>
 
-    function addRow(label, value) {
-      const row = document.createElement("div");
-      row.className = "row";
-      row.innerHTML = '<span class="label"></span><span class="value"></span>';
-      row.querySelector(".label").textContent = label;
-      row.querySelector(".value").textContent = value;
-      els.info.appendChild(row);
-    }
+<!-- Результат -->
+<div class="screen" id="scr-result">
+  <div class="topbar"><button class="link" id="res-back">← Изменить данные</button><span></span></div>
+  <div class="status" id="res-status">—</div>
 
-    function render() {
-      if (!tg) {
-        els.greeting.textContent = "Привет!";
-        els.subtitle.textContent =
-          "Страница открыта вне Telegram. Открой её через бота, чтобы увидеть данные профиля.";
-        els.info.remove();
-        return;
-      }
+  <div class="card res-group">
+    <h3>⛽ Расчёт топлива</h3>
+    <div class="res-row"><span class="l">P1 (без груза, −15%)</span><span class="v" id="r-p1">—</span></div>
+    <div class="res-row"><span class="l">P2 (с грузом)</span><span class="v" id="r-p2">—</span></div>
+    <div class="res-row"><span class="l">H (моточасы)</span><span class="v" id="r-h">—</span></div>
+    <div class="res-row"><span class="l">P (итого топливо)</span><span class="v" id="r-p">—</span></div>
+  </div>
 
-      // Инициализация: сообщаем Telegram, что приложение готово, и разворачиваем на весь экран
-      tg.ready();
-      tg.expand();
+  <div class="card res-group">
+    <h3>📍 Километраж</h3>
+    <div class="res-row"><span class="l">Общий пробег (одометр)</span><span class="v" id="r-odo">—</span></div>
+    <div class="res-row"><span class="l">Пробег (с+без груза)</span><span class="v" id="r-input">—</span></div>
+    <div class="res-row"><span class="l">Расхождение</span><span class="v" id="r-kmdiff">—</span></div>
+  </div>
 
-      const user = tg.initDataUnsafe && tg.initDataUnsafe.user ? tg.initDataUnsafe.user : null;
+  <div class="card res-group">
+    <h3>🛢 Баки</h3>
+    <div class="res-row"><span class="l">Бак на конец (расчёт)</span><span class="v" id="r-tankcalc">—</span></div>
+    <div class="res-row"><span class="l">Бак на конец (введено)</span><span class="v" id="r-tankend">—</span></div>
+    <div class="res-row"><span class="l">Затрачено (введено)</span><span class="v" id="r-spent">—</span></div>
+    <div class="res-row"><span class="l">Затрачено (расчёт)</span><span class="v" id="r-spentcalc">—</span></div>
+  </div>
 
-      if (user) {
-        const name = [user.first_name, user.last_name].filter(Boolean).join(" ");
-        els.greeting.textContent = `Привет, ${user.first_name}!`;
-        els.subtitle.textContent = "Приветственная страница Mini App успешно работает.";
-        els.avatar.innerHTML = "";
-        if (user.photo_url) {
-          const img = document.createElement("img");
-          img.src = user.photo_url;
-          img.alt = name;
-          els.avatar.appendChild(img);
-        } else {
-          els.avatar.textContent = (user.first_name || "?").charAt(0).toUpperCase();
-        }
+  <button class="btn primary" id="btn-confirm">Отправить на сервер</button>
+</div>
 
-        addRow("Имя", name || "—");
-        if (user.username) addRow("Username", "@" + user.username);
-        addRow("ID", String(user.id));
-        if (user.language_code) addRow("Язык", user.language_code);
-      } else {
-        els.greeting.textContent = "Привет!";
-        els.subtitle.textContent = "Mini App открыт, но данные пользователя недоступны.";
-      }
+<div class="toast" id="toast"></div>
 
-      addRow("Платформа", tg.platform || "—");
-      addRow("Версия WebApp", tg.version || "—");
-      addRow("Тема", tg.colorScheme || "—");
-      addRow("initData", tg.initData ? "получена" : "пусто");
+<script>
+const tg = window.Telegram && window.Telegram.WebApp ? window.Telegram.WebApp : null;
+let session = null;         // { role, name, vehicle_plate, is_admin }
+let vehicle = null;         // текущая машина
+let pinBuffer = "";
+let adminPinBuffer = "";
+let lastPayload = null;
 
-      els.action.addEventListener("click", () => {
-        if (tg.HapticFeedback) tg.HapticFeedback.impactOccurred("light");
-        tg.showAlert("Backend и Mini App связаны успешно!");
-      });
-    }
+const $ = (id) => document.getElementById(id);
+const api = async (path, opts = {}) => {
+  const res = await fetch(path, {
+    ...opts,
+    headers: {
+      "Content-Type": "application/json",
+      "X-Telegram-Init-Data": tg ? tg.initData : "",
+      ...(opts.headers || {}),
+    },
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.detail || "Ошибка сервера");
+  return data;
+};
+const show = (id) => {
+  document.querySelectorAll(".screen").forEach((s) => s.classList.remove("active"));
+  $(id).classList.add("active");
+  if (tg) tg.expand();
+};
+const toast = (msg) => {
+  const t = $("toast"); t.textContent = msg; t.classList.add("show");
+  clearTimeout(t._t); t._t = setTimeout(() => t.classList.remove("show"), 2600);
+};
+const num = (id) => parseFloat(($(id).value || "0").replace(",", ".")) || 0;
 
-    // Реагируем на смену темы в Telegram
-    if (tg && tg.onEvent) {
-      tg.onEvent("themeChanged", () => location.reload());
-    }
+function needInitData() {
+  if (!tg || !tg.initData) { show("scr-outside"); return true; }
+  return false;
+}
 
-    render();
-  </script>
+/* ---------- Инициализация ---------- */
+async function boot() {
+  if (needInitData()) return;
+  tg.ready();
+  try {
+    session = await api("/api/session");
+  } catch (e) {
+    show("scr-outside"); return;
+  }
+  if (session.is_admin) { window.location.href = "/admin"; return; }
+  openPin();
+}
+
+/* ---------- Ввод кода машины ---------- */
+function openPin() {
+  pinBuffer = ""; $("pin-error").textContent = ""; renderDots("pin-dots", pinBuffer);
+  show("scr-pin");
+}
+function renderDots(id, val) {
+  $(id).querySelectorAll(".dot").forEach((d, i) => d.classList.toggle("filled", i < val.length));
+}
+async function submitPin() {
+  try {
+    const data = await api("/api/driver/login", {
+      method: "POST", body: JSON.stringify({ code: pinBuffer }),
+    });
+    vehicle = data.vehicle;
+    fillVehicle(data.period);
+    show("scr-form");
+    if (tg.HapticFeedback) tg.HapticFeedback.notificationOccurred("success");
+  } catch (e) {
+    $("pin-error").textContent = e.message;
+    pinBuffer = ""; renderDots("pin-dots", "");
+    if (tg.HapticFeedback) tg.HapticFeedback.notificationOccurred("error");
+  }
+}
+function fillVehicle(period) {
+  $("v-plate").textContent = vehicle.plate;
+  $("v-model").textContent = vehicle.model || "—";
+  $("v-norm").textContent = vehicle.fuel_norm;
+  $("v-moto").textContent = vehicle.motohour_norm;
+  $("v-period").textContent = period ? period.name : "не задан";
+  $("f-date").value = new Date().toISOString().slice(0, 10);
+}
+
+$("keypad").addEventListener("click", (e) => {
+  const k = e.target.dataset.k; if (!k) return;
+  if (k === "del") pinBuffer = pinBuffer.slice(0, -1);
+  else if (k === "admin") { openAdminPin(); return; }
+  else if (pinBuffer.length < 4) pinBuffer += k;
+  renderDots("pin-dots", pinBuffer);
+  $("pin-error").textContent = "";
+  if (pinBuffer.length === 4) setTimeout(submitPin, 120);
+});
+
+/* ---------- Ввод кода админа ---------- */
+function openAdminPin() {
+  adminPinBuffer = ""; $("apin-error").textContent = ""; renderDots("apin-dots", "");
+  show("scr-admin-pin");
+}
+$("admin-back").addEventListener("click", openPin);
+$("apin-keypad").addEventListener("click", (e) => {
+  const k = e.target.dataset.k; if (!k || k === "empty") return;
+  if (k === "del") adminPinBuffer = adminPinBuffer.slice(0, -1);
+  else if (adminPinBuffer.length < 4) adminPinBuffer += k;
+  renderDots("apin-dots", adminPinBuffer);
+  $("apin-error").textContent = "";
+  if (adminPinBuffer.length === 4) setTimeout(submitAdminPin, 120);
+});
+async function submitAdminPin() {
+  try {
+    await api("/api/admin/login", {
+      method: "POST", body: JSON.stringify({ code: adminPinBuffer }),
+    });
+    window.location.href = "/admin";
+  } catch (e) {
+    $("apin-error").textContent = e.message;
+    adminPinBuffer = ""; renderDots("apin-dots", "");
+  }
+}
+
+/* ---------- Форма путевого ---------- */
+const FIELD_IDS = ["km_start","km_end","km_empty","km_loaded","tank_start","fuel_in","tank_end","fuel_spent","motohours"];
+
+function collect() {
+  const payload = { plate: vehicle.plate, waybill_no: $("f-waybill").value.trim(), date: $("f-date").value };
+  FIELD_IDS.forEach((f) => payload[f] = num("f-" + f));
+  return payload;
+}
+
+$("btn-check").addEventListener("click", async () => {
+  try {
+    const payload = collect();
+    if (!payload.waybill_no) return toast("Укажите номер путевого листа");
+    const data = await api("/api/waybill/check", { method: "POST", body: JSON.stringify(payload) });
+    lastPayload = payload;
+    if (data.duplicate) toast("Внимание: путевой с таким номером уже есть");
+    renderResult(data.result);
+    $("btn-save").style.display = "none";
+    show("scr-result");
+  } catch (e) { toast(e.message); }
+});
+
+$("btn-save").addEventListener("click", doSave);
+$("btn-confirm").addEventListener("click", doSave);
+async function doSave() {
+  try {
+    if (!lastPayload) return;
+    const btn = $("btn-confirm");
+    btn.disabled = true; btn.textContent = "Отправка…";
+    await api("/api/waybill/save", { method: "POST", body: JSON.stringify(lastPayload) });
+    if (tg.HapticFeedback) tg.HapticFeedback.notificationOccurred("success");
+    toast("Путевой отправлен на сервер ✓");
+    setTimeout(() => { openPin(); }, 900);
+  } catch (e) {
+    toast(e.message);
+  } finally {
+    const btn = $("btn-confirm");
+    btn.disabled = false; btn.textContent = "Отправить на сервер";
+  }
+}
+
+function setVal(id, text, state) {
+  const el = $(id); el.textContent = text;
+  el.classList.remove("ok", "bad");
+  if (state) el.classList.add(state);
+}
+function renderResult(d) {
+  setVal("r-p1", d.p1 + " л"); setVal("r-p2", d.p2 + " л");
+  setVal("r-h", d.h + " л");   setVal("r-p", d.fuel_calc + " л");
+
+  setVal("r-odo", d.km_total_odo.toFixed(1) + " км", d.km_ok ? "ok" : "bad");
+  setVal("r-input", d.km_total_input.toFixed(1) + " км", d.km_ok ? "ok" : "bad");
+  setVal("r-kmdiff", d.km_ok ? "0 км" : (d.km_total_odo - d.km_total_input).toFixed(2) + " км", d.km_ok ? "ok" : "bad");
+
+  setVal("r-tankcalc", d.tank_end_calc.toFixed(1) + " л", d.tank_ok ? "ok" : "bad");
+  setVal("r-tankend", d.tank_end.toFixed(1) + " л", d.tank_ok ? "ok" : "bad");
+  setVal("r-spent", d.fuel_spent.toFixed(1) + " л", d.fuel_ok ? "ok" : "bad");
+  setVal("r-spentcalc", d.fuel_calc + " л", d.fuel_ok ? "ok" : "bad");
+
+  const st = $("res-status");
+  st.className = "status " + (d.is_ok ? "ok" : "bad");
+  st.textContent = d.is_ok ? "✔  Данные корректны" : "⚠  Обнаружены расхождения";
+}
+
+$("res-back").addEventListener("click", () => show("scr-form"));
+$("change-vehicle").addEventListener("click", openPin);
+$("to-admin").addEventListener("click", openAdminPin);
+
+/* ---------- Тема ---------- */
+if (tg && tg.onEvent) tg.onEvent("themeChanged", () => location.reload());
+boot();
+</script>
 </body>
 </html>
