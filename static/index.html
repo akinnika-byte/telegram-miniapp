@@ -23,13 +23,12 @@
   body {
     background: var(--bg); color: var(--text); min-height: 100vh;
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; font-size: 16px;
-    transition: background .2s, color .2s;
   }
   .screen { display: none; padding: 20px 16px 40px; max-width: 520px; margin: 0 auto; }
-  .screen.active { display: block; animation: fade .25s ease; }
-  @keyframes fade { from { opacity: 0; transform: translateY(6px);} to { opacity: 1; transform: none;} }
+  .screen.active { display: block; animation: fade .28s cubic-bezier(.2,.7,.3,1); }
+  @keyframes fade { from { opacity: 0; transform: translateY(10px);} to { opacity: 1; transform: none;} }
 
-  h1 { font-size: 22px; margin: 0 0 6px; font-weight: 800; }
+  h1 { font-size: 22px; margin: 0 0 6px; font-weight: 800; letter-spacing: -.2px; }
   h2 { font-size: 18px; margin: 0 0 12px; font-weight: 700; }
   .sub { color: var(--hint); font-size: 14px; margin: 0 0 20px; line-height: 1.45; }
   .center { text-align: center; }
@@ -37,19 +36,37 @@
   .muted { color: var(--hint); font-size: 14px; line-height: 1.5; }
 
   /* ---- Клавиатура кода ---- */
-  .pin-dots { display: flex; justify-content: center; gap: 14px; margin: 20px 0 4px; }
-  .dot { width: 16px; height: 16px; border-radius: 50%; border: 2px solid var(--hint); transition: .15s; }
-  .dot.filled { background: var(--accent); border-color: var(--accent); transform: scale(1.08); }
+  .dots { display: flex; justify-content: center; gap: 14px; margin: 22px 0 6px; }
+  .dot { width: 16px; height: 16px; border-radius: 50%; border: 2px solid var(--hint);
+         transition: transform .18s cubic-bezier(.2,1.6,.4,1), background .15s, border-color .15s; }
+  .dot.filled { background: var(--accent); border-color: var(--accent); transform: scale(1.18); }
   .pin-error { color: var(--bad); font-size: 14px; min-height: 20px; margin: 6px 0 10px; }
   .keypad { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; max-width: 320px; margin: 0 auto; }
-  .key {
-    height: 62px; border: none; border-radius: 16px; background: var(--card); color: var(--text);
-    font-size: 24px; font-weight: 700; cursor: pointer; transition: transform .08s, background .15s;
-  }
-  .key:active { transform: scale(.94); background: var(--border); }
+  .key { height: 62px; border: none; border-radius: 16px; background: var(--card); color: var(--text);
+         font-size: 24px; font-weight: 700; cursor: pointer;
+         transition: transform .08s, background .15s; }
+  .key:active { transform: scale(.92); background: var(--border); }
   .key.blank { background: transparent; pointer-events: none; }
-  .powered { text-align: center; margin-top: 26px; color: var(--hint); font-size: 13px; }
+  .powered { text-align: center; margin-top: 28px; color: var(--hint); font-size: 13px; }
   .powered b { color: var(--accent); font-weight: 800; }
+
+  /* ---- Анимация проверки кода ---- */
+  .checking { text-align: center; margin-top: 90px; }
+  .ring { width: 84px; height: 84px; margin: 0 auto 26px; position: relative; }
+  .ring::before, .ring::after {
+    content: ""; position: absolute; inset: 0; border-radius: 50%;
+  }
+  .ring::before {
+    border: 4px solid var(--border); border-top-color: var(--accent);
+    animation: spin .9s linear infinite;
+  }
+  .ring::after {
+    inset: 14px; border: 3px solid transparent; border-bottom-color: var(--accent);
+    animation: spin 1.4s linear infinite reverse;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .checking .code { font-size: 30px; font-weight: 800; letter-spacing: 6px; animation: pulse 1.2s ease-in-out infinite; }
+  @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: .35; } }
 
   /* ---- Карточки ---- */
   .card { background: var(--card); border-radius: 18px; padding: 16px; margin-bottom: 14px; }
@@ -57,68 +74,82 @@
   .vehicle .plate {
     background: var(--accent); color: var(--accent-text); font-weight: 800;
     border-radius: 12px; padding: 10px 14px; font-size: 20px; letter-spacing: 1px;
+    box-shadow: 0 6px 18px rgba(79,140,255,.28);
   }
-  .vehicle .meta { font-size: 13px; color: var(--hint); line-height: 1.5; }
+  .vehicle .meta { font-size: 13px; color: var(--hint); line-height: 1.55; }
   .vehicle .meta b { color: var(--text); font-weight: 600; }
 
   .menu-item {
     display: flex; align-items: center; gap: 14px; width: 100%; text-align: left;
     background: var(--card); border: none; border-radius: 18px; padding: 16px;
-    color: var(--text); margin-bottom: 12px; cursor: pointer; transition: transform .08s;
+    color: var(--text); margin-bottom: 12px; cursor: pointer;
+    transition: transform .09s ease, box-shadow .2s;
   }
-  .menu-item:active { transform: scale(.98); }
-  .menu-item .ico { font-size: 26px; width: 40px; text-align: center; }
+  .menu-item:active { transform: scale(.975); }
+  .menu-item .ico { font-size: 26px; width: 42px; height: 42px; display: flex; align-items: center;
+                    justify-content: center; border-radius: 13px; background: rgba(128,140,170,.12); }
   .menu-item .t { font-size: 17px; font-weight: 700; }
   .menu-item .d { font-size: 13px; color: var(--hint); margin-top: 2px; }
-  .menu-item.primary { background: var(--accent); color: var(--accent-text); }
-  .menu-item.primary .d { color: rgba(255,255,255,.75); }
+  .menu-item.primary { background: linear-gradient(135deg, var(--accent), #6ba0ff); color: #fff;
+                       box-shadow: 0 8px 22px rgba(79,140,255,.3); }
+  .menu-item.primary .d { color: rgba(255,255,255,.82); }
+  .menu-item.primary .ico { background: rgba(255,255,255,.18); }
+  .menu-item.disabled { opacity: .45; pointer-events: none; }
 
-  .row { display: flex; justify-content: space-between; gap: 12px; padding: 9px 0; font-size: 15px; }
+  .notice { border-radius: 16px; padding: 14px 16px; margin-bottom: 14px; font-size: 14px; line-height: 1.45; }
+  .notice.warn { background: var(--bad-bg); color: var(--bad); }
+
+  .row { display: flex; justify-content: space-between; gap: 12px; padding: 10px 0; font-size: 15px; }
   .row + .row { border-top: 1px solid var(--border); }
   .row .l { color: var(--hint); }
-  .row .v { font-weight: 700; text-align: right; }
+  .row .v { font-weight: 700; text-align: right; font-variant-numeric: tabular-nums; }
   .row .v.ok { color: var(--ok); } .row .v.bad { color: var(--bad); } .row .v.warn { color: var(--warn); }
+  .card h3 { margin: 0 0 8px; font-size: 13px; color: var(--hint); font-weight: 700;
+             text-transform: uppercase; letter-spacing: .4px; }
 
   .field { margin-bottom: 12px; }
   .field label { display: block; font-size: 13px; color: var(--hint); margin-bottom: 5px; }
   .field input {
-    width: 100%; height: 48px; border-radius: 12px; border: 1.5px solid var(--border);
+    width: 100%; height: 50px; border-radius: 13px; border: 1.5px solid var(--border);
     background: var(--bg); color: var(--text); font-size: 17px; padding: 0 14px; outline: none;
+    transition: border-color .15s, box-shadow .15s;
   }
-  .field input:focus { border-color: var(--accent); }
+  .field input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(79,140,255,.15); }
   .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 0 12px; }
 
-  .btn { width: 100%; height: 54px; border: none; border-radius: 16px; font-size: 17px; font-weight: 700; cursor: pointer; }
+  .btn { width: 100%; height: 56px; border: none; border-radius: 16px; font-size: 17px; font-weight: 700;
+         cursor: pointer; transition: transform .08s, opacity .15s; }
   .btn:active { transform: scale(.98); }
-  .btn.primary { background: var(--accent); color: var(--accent-text); }
+  .btn.primary { background: var(--accent); color: var(--accent-text); box-shadow: 0 8px 20px rgba(79,140,255,.28); }
   .btn.ghost { background: transparent; color: var(--accent); border: 1.5px solid var(--accent); }
-  .btn:disabled { opacity: .5; }
+  .btn:disabled { opacity: .55; }
   .btn + .btn { margin-top: 10px; }
 
-  .status { border-radius: 16px; padding: 16px; text-align: center; font-weight: 800; font-size: 17px; margin-bottom: 14px; }
+  .status { border-radius: 18px; padding: 20px 16px; text-align: center; margin-bottom: 16px; }
+  .status .big { font-size: 24px; font-weight: 800; margin-bottom: 4px; }
+  .status .small { font-size: 13px; opacity: .9; }
   .status.ok { background: var(--ok-bg); color: var(--ok); }
   .status.bad { background: var(--bad-bg); color: var(--bad); }
 
   .topbar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px; }
-  .link { color: var(--accent); font-size: 14px; background: none; border: none; cursor: pointer; padding: 6px; }
-  .badge { display: inline-block; font-size: 11px; font-weight: 700; padding: 3px 8px; border-radius: 8px; }
+  .link { color: var(--accent); font-size: 14px; background: none; border: none; cursor: pointer; padding: 6px;
+          border-radius: 9px; }
+  .badge { display: inline-block; font-size: 11px; font-weight: 700; padding: 3px 9px; border-radius: 9px; }
   .badge.ok { background: var(--ok-bg); color: var(--ok); }
   .badge.bad { background: var(--bad-bg); color: var(--bad); }
   .hist { background: var(--card); border-radius: 16px; padding: 14px 16px; margin-bottom: 10px; }
   .hist .h { display: flex; justify-content: space-between; align-items: center; }
   .hist .h b { font-size: 16px; }
-  .hist .kv { display: grid; grid-template-columns: 1fr 1fr; gap: 4px 12px; margin-top: 8px; font-size: 13px; color: var(--hint); }
+  .hist .kv { display: grid; grid-template-columns: 1fr 1fr; gap: 4px 12px; margin-top: 8px;
+              font-size: 13px; color: var(--hint); }
   .hist .kv b { color: var(--text); }
-  .empty { text-align: center; color: var(--hint); padding: 30px 10px; }
-  .toast {
-    position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%) translateY(120%);
-    background: #111; color: #fff; padding: 12px 20px; border-radius: 14px; font-size: 14px;
-    transition: transform .3s; max-width: 90%; text-align: center; z-index: 50;
-  }
+  .empty { text-align: center; color: var(--hint); padding: 34px 10px; }
+  .toast { position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%) translateY(140%);
+           background: #111; color: #fff; padding: 13px 20px; border-radius: 14px; font-size: 14px;
+           transition: transform .35s cubic-bezier(.2,.9,.3,1); max-width: 90%; text-align: center; z-index: 50; }
   .toast.show { transform: translateX(-50%) translateY(0); }
   .spinner { width: 26px; height: 26px; border: 3px solid var(--border); border-top-color: var(--accent);
              border-radius: 50%; margin: 40px auto; animation: spin 1s linear infinite; }
-  @keyframes spin { to { transform: rotate(360deg); } }
 </style>
 </head>
 <body>
@@ -142,14 +173,14 @@
   </div>
 </div>
 
-<!-- Единый экран входа -->
+<!-- Экран входа -->
 <div class="screen" id="scr-lock">
   <div class="center">
     <div class="logo">🚚</div>
     <h1>АВТР(ПГ)</h1>
     <p class="sub">Введите код доступа</p>
   </div>
-  <div class="pin-dots" id="dots"><div class="dot"></div><div class="dot"></div><div class="dot"></div><div class="dot"></div></div>
+  <div class="dots" id="dots"><div class="dot"></div><div class="dot"></div><div class="dot"></div><div class="dot"></div></div>
   <div class="pin-error center" id="pin-error"></div>
   <div class="keypad" id="keypad">
     <button class="key" data-k="1">1</button><button class="key" data-k="2">2</button>
@@ -162,12 +193,23 @@
   <div class="powered">powered by <b>botvinev</b></div>
 </div>
 
+<!-- Анимация проверки кода -->
+<div class="screen" id="scr-checking">
+  <div class="checking">
+    <div class="ring"></div>
+    <h1>Проверяем код</h1>
+    <p class="sub" style="margin-bottom:0">Пожалуйста, подождите</p>
+    <div class="code" id="checking-code">••••</div>
+  </div>
+</div>
+
 <!-- Главное меню водителя -->
 <div class="screen" id="scr-menu">
   <div class="topbar">
-    <div><h1 id="menu-hello">Здравствуйте!</h1><p class="sub" id="menu-sub">—</p></div>
+    <div><h1 id="menu-hello">Здравствуйте!</h1><p class="sub" id="menu-sub" style="margin:0">—</p></div>
     <button class="link" id="logout">Выйти</button>
   </div>
+  <div id="menu-notice"></div>
   <button class="menu-item primary" id="m-new">
     <span class="ico">📝</span>
     <span><span class="t">Новый путевой</span><div class="d">Проверить и отправить</div></span>
@@ -215,7 +257,6 @@
     <div class="meta">
       <div>Модель: <b id="v-model">—</b></div>
       <div>Норма: <b id="v-norm">—</b> л/100км · <b id="v-moto">—</b> л/моточас</div>
-      <div>Отчёт: <b id="v-period">—</b></div>
     </div>
   </div>
   <div class="card">
@@ -233,41 +274,47 @@
       <div class="field"><label>Моточасы</label><input id="f-motohours" inputmode="decimal" placeholder="0" /></div>
     </div>
   </div>
-  <button class="btn primary" id="btn-check">Проверить</button>
+  <button class="btn primary" id="btn-check">Проверить и отправить</button>
+  <p class="muted center" style="font-size:12px;margin-top:12px">
+    Отчёт проверится и сразу уйдёт на сервер
+  </p>
 </div>
 
-<!-- Результат -->
+<!-- Результат (уже отправлено) -->
 <div class="screen" id="scr-result">
-  <div class="topbar"><button class="link" id="res-back">← Изменить данные</button><span></span></div>
-  <div class="status" id="res-status">—</div>
+  <div class="status" id="res-status">
+    <div class="big" id="res-status-big">—</div>
+    <div class="small" id="res-status-small">—</div>
+  </div>
   <div class="card">
-    <h3 style="margin:0 0 8px;font-size:14px;color:var(--hint)">⛽ Расчёт топлива</h3>
+    <h3>⛽ Расчёт топлива</h3>
     <div class="row"><span class="l">P1 (без груза, −15%)</span><span class="v" id="r-p1">—</span></div>
     <div class="row"><span class="l">P2 (с грузом)</span><span class="v" id="r-p2">—</span></div>
     <div class="row"><span class="l">H (моточасы)</span><span class="v" id="r-h">—</span></div>
     <div class="row"><span class="l">P (итого топливо)</span><span class="v" id="r-p">—</span></div>
   </div>
   <div class="card">
-    <h3 style="margin:0 0 8px;font-size:14px;color:var(--hint)">📍 Километраж</h3>
+    <h3>📍 Километраж</h3>
     <div class="row"><span class="l">Общий пробег (одометр)</span><span class="v" id="r-odo">—</span></div>
     <div class="row"><span class="l">Пробег (с+без груза)</span><span class="v" id="r-input">—</span></div>
     <div class="row"><span class="l">Расхождение</span><span class="v" id="r-kmdiff">—</span></div>
   </div>
   <div class="card">
-    <h3 style="margin:0 0 8px;font-size:14px;color:var(--hint)">🛢 Баки</h3>
+    <h3>🛢 Баки</h3>
     <div class="row"><span class="l">Бак на конец (расчёт)</span><span class="v" id="r-tankcalc">—</span></div>
     <div class="row"><span class="l">Бак на конец (введено)</span><span class="v" id="r-tankend">—</span></div>
     <div class="row"><span class="l">Затрачено (введено)</span><span class="v" id="r-spent">—</span></div>
     <div class="row"><span class="l">Затрачено (расчёт)</span><span class="v" id="r-spentcalc">—</span></div>
   </div>
-  <button class="btn primary" id="btn-confirm">Отправить на сервер</button>
+  <button class="btn primary" id="btn-done">Готово</button>
+  <button class="btn ghost" id="btn-again">Новый путевой</button>
 </div>
 
 <div class="toast" id="toast"></div>
 
 <script>
 const tg = window.Telegram && window.Telegram.WebApp ? window.Telegram.WebApp : null;
-let session = null, vehicle = null, pin = "", lastPayload = null;
+let session = null, vehicle = null, pin = "";
 
 const $ = (id) => document.getElementById(id);
 const api = async (path, opts = {}) => {
@@ -285,9 +332,10 @@ const show = (id) => {
 const esc = (s) => String(s ?? "").replace(/[&<>"]/g, c => ({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;" }[c]));
 const num = (id) => parseFloat(($(id).value || "0").replace(",", ".")) || 0;
 const nf = (v, d = 1) => Number(v ?? 0).toFixed(d);
-const toast = (m) => { const t = $("toast"); t.textContent = m; t.classList.add("show");
-  clearTimeout(t._t); t._t = setTimeout(() => t.classList.remove("show"), 2600); };
 const dstr = (s) => s ? new Date(s).toLocaleDateString("ru-RU") : "—";
+const toast = (m) => { const t = $("toast"); t.textContent = m; t.classList.add("show");
+  clearTimeout(t._t); t._t = setTimeout(() => t.classList.remove("show"), 2800); };
+const buzz = (type) => { try { tg && tg.HapticFeedback && tg.HapticFeedback.notificationOccurred(type); } catch (e) {} };
 function expiryClass(iso) {
   if (!iso) return "";
   const days = (new Date(iso) - new Date()) / 86400000;
@@ -319,18 +367,23 @@ $("keypad").addEventListener("click", (e) => {
   const k = e.target.dataset.k; if (!k) return;
   if (k === "del") pin = pin.slice(0, -1); else if (pin.length < 4) pin += k;
   renderDots(); $("pin-error").textContent = "";
-  if (pin.length === 4) setTimeout(submitPin, 120);
+  if (pin.length === 4) setTimeout(submitPin, 140);
 });
 async function submitPin() {
+  const code = pin;
+  $("checking-code").textContent = code;
+  show("scr-checking");
   try {
-    const data = await api("/api/login", { method: "POST", body: JSON.stringify({ code: pin }) });
+    const data = await api("/api/login", { method: "POST", body: JSON.stringify({ code }) });
     if (data.kind === "admin") { window.location.href = "/admin"; return; }
     vehicle = data.vehicle;
-    if (tg.HapticFeedback) tg.HapticFeedback.notificationOccurred("success");
+    buzz("success");
     openMenu();
   } catch (e) {
-    $("pin-error").textContent = e.message; pin = ""; renderDots();
-    if (tg.HapticFeedback) tg.HapticFeedback.notificationOccurred("error");
+    buzz("error");
+    show("scr-lock");
+    $("pin-error").textContent = e.message;
+    pin = ""; renderDots();
   }
 }
 $("logout").addEventListener("click", async () => {
@@ -343,6 +396,13 @@ function openMenu() {
   const name = (session && session.name) ? session.name.split(" (@")[0] : "";
   $("menu-hello").textContent = name ? `Здравствуйте, ${name}!` : "Здравствуйте!";
   $("menu-sub").textContent = `Машина ${vehicle.plate} · ${vehicle.model || "—"}`;
+
+  const noNorm = !Number(vehicle.fuel_norm);
+  $("menu-notice").innerHTML = noNorm
+    ? `<div class="notice warn">⚠ По вашей машине ещё не заданы нормы расхода.
+         Обратитесь к технику роты — после этого можно будет проверять путевые.</div>`
+    : "";
+  $("m-new").classList.toggle("disabled", noNorm);
   show("scr-menu");
 }
 $("m-new").addEventListener("click", () => {
@@ -350,7 +410,6 @@ $("m-new").addEventListener("click", () => {
   $("v-model").textContent = vehicle.model || "—";
   $("v-norm").textContent = vehicle.fuel_norm;
   $("v-moto").textContent = vehicle.motohour_norm;
-  $("v-period").textContent = "по дате путевого";
   $("f-date").value = new Date().toISOString().slice(0, 10);
   $("f-waybill").value = "";
   ["km_start","km_end","km_empty","km_loaded","tank_start","fuel_in","tank_end","fuel_spent","motohours"]
@@ -384,7 +443,7 @@ async function loadHistory() {
   } catch (e) { $("hist-list").innerHTML = `<div class="empty">${esc(e.message)}</div>`; }
 }
 
-/* ---------- Моя машина ---------- */
+/* ---------- Моя машина / Профиль ---------- */
 function vehRow(label, value, cls) {
   return `<div class="row"><span class="l">${label}</span><span class="v ${cls || ""}">${esc(value || "—")}</span></div>`;
 }
@@ -399,30 +458,28 @@ async function loadVehicle() {
         <div>Норма: <b>${v.fuel_norm}</b> л/100км · <b>${v.motohour_norm}</b> л/моточас</div></div>
       </div>
       <div class="card">
-        <h3 style="margin:0 0 8px;font-size:14px;color:var(--hint)">🔧 Характеристики</h3>
+        <h3>🔧 Характеристики</h3>
         ${vehRow("VIN", v.vin)}
         ${vehRow("Двигатель", v.engine_no)}
         ${vehRow("Шасси", v.chassis_no)}
         ${vehRow("Объём бака", v.tank_capacity ? v.tank_capacity + " л" : null)}
       </div>
       <div class="card">
-        <h3 style="margin:0 0 8px;font-size:14px;color:var(--hint)">👤 Водитель</h3>
+        <h3>👤 Водитель</h3>
         ${vehRow("ФИО", v.driver_name)}
         ${vehRow("Звание", v.driver_rank)}
         ${vehRow("Должность", v.driver_position)}
         ${vehRow("Права", v.driver_license)}
       </div>
       <div class="card">
-        <h3 style="margin:0 0 8px;font-size:14px;color:var(--hint)">📄 Документы (срок действия)</h3>
+        <h3>📄 Документы (срок действия)</h3>
         ${vehRow("СТС", dstr(v.sts_expires), expiryClass(v.sts_expires))}
         ${vehRow("Диагност. карта", dstr(v.diagnostic_card_expires), expiryClass(v.diagnostic_card_expires))}
         ${vehRow("Красная полоса", dstr(v.red_stripe_expires), expiryClass(v.red_stripe_expires))}
       </div>
-      <p class="muted" style="font-size:12px;text-align:center">Данные заполняет техник роты</p>`;
+      <p class="muted center" style="font-size:12px">Данные заполняет техник роты</p>`;
   } catch (e) { $("veh-body").innerHTML = `<div class="empty">${esc(e.message)}</div>`; }
 }
-
-/* ---------- Профиль ---------- */
 async function loadProfile() {
   show("scr-profile"); $("prof-body").innerHTML = '<div class="spinner"></div>';
   try {
@@ -439,40 +496,32 @@ async function loadProfile() {
   } catch (e) { $("prof-body").innerHTML = `<div class="empty">${esc(e.message)}</div>`; }
 }
 
-/* ---------- Форма и проверка ---------- */
+/* ---------- Проверка и отправка ---------- */
 const FIELD_IDS = ["km_start","km_end","km_empty","km_loaded","tank_start","fuel_in","tank_end","fuel_spent","motohours"];
-function collect() {
-  const p = { plate: vehicle.plate, waybill_no: $("f-waybill").value.trim(), date: $("f-date").value };
-  FIELD_IDS.forEach(f => p[f] = num("f-" + f));
-  return p;
-}
 $("btn-check").addEventListener("click", async () => {
+  const btn = $("btn-check");
+  const payload = { plate: vehicle.plate, waybill_no: $("f-waybill").value.trim(), date: $("f-date").value };
+  FIELD_IDS.forEach(f => payload[f] = num("f-" + f));
+  if (!payload.waybill_no) return toast("Укажите номер путевого листа");
+
+  btn.disabled = true; btn.textContent = "Проверяем…";
   try {
-    const payload = collect();
-    if (!payload.waybill_no) return toast("Укажите номер путевого листа");
-    const data = await api("/api/waybill/check", { method: "POST", body: JSON.stringify(payload) });
-    lastPayload = payload;
-    if (data.duplicate) toast("Внимание: такой путевой уже есть");
-    renderResult(data.result);
+    const data = await api("/api/waybill/save", { method: "POST", body: JSON.stringify(payload) });
+    buzz("success");
+    renderResult(data.result, payload.waybill_no);
     show("scr-result");
-  } catch (e) { toast(e.message); }
-});
-$("btn-confirm").addEventListener("click", async () => {
-  const b = $("btn-confirm");
-  try {
-    b.disabled = true; b.textContent = "Отправка…";
-    await api("/api/waybill/save", { method: "POST", body: JSON.stringify(lastPayload) });
-    if (tg.HapticFeedback) tg.HapticFeedback.notificationOccurred("success");
-    toast("Путевой отправлен ✓");
-    setTimeout(openMenu, 900);
-  } catch (e) { toast(e.message); }
-  finally { b.disabled = false; b.textContent = "Отправить на сервер"; }
+  } catch (e) {
+    buzz("error");
+    toast(e.message);
+  } finally {
+    btn.disabled = false; btn.textContent = "Проверить и отправить";
+  }
 });
 function setVal(id, text, cls) {
   const el = $(id); el.textContent = text; el.classList.remove("ok", "bad");
   if (cls) el.classList.add(cls);
 }
-function renderResult(d) {
+function renderResult(d, waybillNo) {
   setVal("r-p1", d.p1 + " л"); setVal("r-p2", d.p2 + " л");
   setVal("r-h", d.h + " л"); setVal("r-p", d.fuel_calc + " л");
   setVal("r-odo", nf(d.km_total_odo) + " км", d.km_ok ? "ok" : "bad");
@@ -482,11 +531,16 @@ function renderResult(d) {
   setVal("r-tankend", nf(d.tank_end) + " л", d.tank_ok ? "ok" : "bad");
   setVal("r-spent", nf(d.fuel_spent) + " л", d.fuel_ok ? "ok" : "bad");
   setVal("r-spentcalc", d.fuel_calc + " л", d.fuel_ok ? "ok" : "bad");
+
   const st = $("res-status");
   st.className = "status " + (d.is_ok ? "ok" : "bad");
-  st.textContent = d.is_ok ? "✔  Данные корректны" : "⚠  Обнаружены расхождения";
+  $("res-status-big").textContent = d.is_ok ? "✔ Отправлено" : "⚠ Расхождения";
+  $("res-status-small").textContent = d.is_ok
+    ? `Путевой №${waybillNo} сохранён на сервере`
+    : `Путевой №${waybillNo} сохранён, но проверьте данные`;
 }
-$("res-back").addEventListener("click", () => show("scr-form"));
+$("btn-done").addEventListener("click", openMenu);
+$("btn-again").addEventListener("click", () => $("m-new").click());
 $("err-retry").addEventListener("click", loadSession);
 if (tg && tg.onEvent) tg.onEvent("themeChanged", () => location.reload());
 boot();
