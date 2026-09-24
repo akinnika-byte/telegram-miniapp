@@ -182,7 +182,14 @@ async function startPanel() {
     periods = await api("/api/periods");
     $("period-select").innerHTML = periods.map(p =>
       `<option value="${p.id}">${esc(p.name)} — ${p.start_date} … ${p.end_date}${p.is_open ? "" : " (закрыт)"}</option>`).join("");
-    if (periods.length) { currentPeriod = periods[0].id; loadReport(); loadActivity(); }
+    if (periods.length) {
+      const today = new Date().toISOString().slice(0, 10);
+      const current = periods.find(p => p.start_date <= today && today <= p.end_date);
+      currentPeriod = current ? current.id : periods[0].id;
+      $("period-select").value = currentPeriod;
+      loadReport();
+      loadActivity();
+    }
   } catch (e) { $("tab-report").innerHTML = `<div class="empty">${esc(e.message)}</div>`; }
 }
 
