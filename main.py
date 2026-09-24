@@ -182,6 +182,17 @@ def parse_optional_date(value: Optional[str]) -> Optional[date]:
         raise HTTPException(status_code=400, detail="Неверный формат даты")
 
 
+def period_sig(conn, period_id: int) -> str:
+    """Отпечаток набора путевых периода: меняется при добавлении/правке."""
+    row = conn.execute(
+        "select count(*) as n, max(updated_at) as m "
+        "from waybills where period_id = %s",
+        (period_id,),
+    ).fetchone()
+    stamp = int(row["m"].timestamp()) if row["m"] else 0
+    return f"{row['n']}-{stamp}"
+
+
 # ============================================================
 #   Страницы
 # ============================================================
@@ -619,6 +630,7 @@ def admin_report(period_id: int, user: dict = Depends(require_admin)) -> dict:
             """,
             (period_id,),
         ).fetchall()
+        sig = period_sig(conn, period_id)
 
     groups: dict[str, dict] = {}
     for r in records:
@@ -668,6 +680,7 @@ def admin_report(period_id: int, user: dict = Depends(require_admin)) -> dict:
         "groups": [groups[p] for p in sorted(groups, key=sort_key)],
         "total_count": len(records),
         "total_bad": sum(1 for r in records if not r["is_ok"]),
+        "sig": sig,
     }
 
 
@@ -693,6 +706,7 @@ def admin_summary(period_id: int, user: dict = Depends(require_admin)) -> dict:
             """,
             (period_id,),
         ).fetchall()
+        sig = period_sig(conn, period_id)
 
     groups: dict[str, dict] = {}
     for r in records:
@@ -731,7 +745,7 @@ def admin_summary(period_id: int, user: dict = Depends(require_admin)) -> dict:
         "fuel_spent": sum(r["fuel_spent"] for r in rows),
         "fuel_calc": sum(r["fuel_calc"] for r in rows),
     }
-    return {"period": period, "rows": rows, "totals": totals}
+    return {"period": period, "rows": rows, "totals": totals, "sig": sig}
 
 
 @app.get("/api/admin/activity")
@@ -852,6 +866,34 @@ def admin_vehicle_save(payload: VehicleIn, user: dict = Depends(require_admin)) 
         log_action(conn, user, action, "vehicle", row["id"], {"plate": plate})
 
     return row
+
+
+@app.get("/api/admin/version")
+def admin_version(period_id: int, user: dict = Depends(require_admin)) -> dict:
+    """Лёгкая проверка: изменились ли путевые периода."""
+    with db() as conn:
+        return {"sig": period_sig(conn, period_id)}
+
+
+@app.get("/api/admin/vehicle-waybills")
+def admin_vehicle_waybills(plate: str, user: dict = Depends(require_admin)) -> list:
+    """Все путевые конкретной машины (для карточки водителя)."""
+    with db() as conn:
+        return conn.execute(
+            """
+            select w.id, w.waybill_no, w.plate, w.created_at, w.waybill_date,
+                   w.km_start, w.km_end, w.km_empty, w.km_loaded,
+                   w.tank_start, w.fuel_in, w.tank_end, w.fuel_spent, w.motohours,
+                   w.km_total_odo, w.fuel_calc, w.is_ok, w.is_corrected,
+                   p.name as period_name
+            from waybills w
+            join periods p on p.id = w.period_id
+            where w.plate = %s
+            order by w.created_at desc
+            limit 200
+            """,
+            (plate,),
+        ).fetchall()
 
 
 @app.get("/api/admin/drivers")
