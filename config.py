@@ -19,7 +19,7 @@ INIT_DATA_MAX_AGE = int(os.getenv("INIT_DATA_MAX_AGE", "86400"))
 # Роли админов
 ADMIN_ROLES = ("owner", "commander", "technician")
 ADMIN_ROLE_TITLES = {
-    "owner": "Командир части",
+    "owner": "Администратор",
     "commander": "Командир роты",
     "technician": "Техник роты",
 }

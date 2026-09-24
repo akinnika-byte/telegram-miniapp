@@ -16,6 +16,17 @@ create table if not exists vehicles (
     motohour_norm   numeric(6,2)  not null default 0,      -- л / моточас
     tank_capacity   numeric(6,2)  not null default 0,
     is_active       boolean not null default true,
+
+    -- сведения о машине (заполняет техник роты)
+    vin             text,
+    engine_no       text,
+    chassis_no      text,
+    driver_name     text,
+    driver_license  text,
+    sts_expires              date,                         -- СТС
+    diagnostic_card_expires  date,                         -- диагностическая карта
+    red_stripe_expires       date,                         -- красная полоса
+
     created_at      timestamptz not null default now(),
     updated_at      timestamptz not null default now()
 );
@@ -161,3 +172,15 @@ alter table waybills          enable row level security;
 alter table activity_log      enable row level security;
 alter table vehicle_documents enable row level security;
 alter table vehicle_state     enable row level security;
+
+-- ============================================================
+--  Дополнения к существующей базе (идемпотентно)
+-- ============================================================
+alter table vehicles add column if not exists vin            text;
+alter table vehicles add column if not exists engine_no      text;
+alter table vehicles add column if not exists chassis_no     text;
+alter table vehicles add column if not exists driver_name    text;
+alter table vehicles add column if not exists driver_license text;
+alter table vehicles add column if not exists sts_expires             date;
+alter table vehicles add column if not exists diagnostic_card_expires date;
+alter table vehicles add column if not exists red_stripe_expires      date;

@@ -60,6 +60,25 @@ class WaybillIn(BaseModel):
     motohours: float = 0
 
 
+class VehicleIn(BaseModel):
+    """Создание/редактирование машины (техник роты)."""
+    id: Optional[int] = None
+    plate: str
+    model: str = ""
+    fuel_norm: float = 0
+    motohour_norm: float = 0
+    tank_capacity: float = 0
+    is_active: bool = True
+    vin: Optional[str] = None
+    engine_no: Optional[str] = None
+    chassis_no: Optional[str] = None
+    driver_name: Optional[str] = None
+    driver_license: Optional[str] = None
+    sts_expires: Optional[str] = None
+    diagnostic_card_expires: Optional[str] = None
+    red_stripe_expires: Optional[str] = None
+
+
 # ============================================================
 #   Служебные функции
 # ============================================================
@@ -151,6 +170,15 @@ def parse_date(value: Optional[str]) -> date:
         raise HTTPException(status_code=400, detail="Неверный формат даты")
 
 
+def parse_optional_date(value: Optional[str]) -> Optional[date]:
+    if not value:
+        return None
+    try:
+        return datetime.strptime(value[:10], "%Y-%m-%d").date()
+    except (ValueError, TypeError):
+        raise HTTPException(status_code=400, detail="Неверный формат даты")
+
+
 # ============================================================
 #   Страницы
 # ============================================================
@@ -209,6 +237,54 @@ def session(user: dict = Depends(current_user)) -> dict:
     }
 
 
+@app.post("/api/login")
+def login(payload: CodeIn, user: dict = Depends(current_user)) -> dict:
+    """Единый вход по 4-значному коду.
+
+    Сначала ищем машину с таким ГРЗ (водитель), затем код администратора.
+    """
+    code = (payload.code or "").strip()
+    if not code.isdigit() or len(code) != 4:
+        raise HTTPException(status_code=400, detail="Код — ровно 4 цифры")
+
+    with db() as conn:
+        vehicle = conn.execute(
+            "select * from vehicles where plate = %s and is_active", (code,)
+        ).fetchone()
+        if vehicle:
+            conn.execute(
+                "update app_users set role = 'driver', vehicle_plate = %s, "
+                "last_seen_at = now() where telegram_id = %s",
+                (vehicle["plate"], user["telegram_id"]),
+            )
+            log_action(conn, user, "driver_login", "vehicle", vehicle["id"],
+                       {"plate": vehicle["plate"]})
+            return {"kind": "driver", "vehicle": vehicle}
+
+        admin = conn.execute(
+            "select role from access_codes where code_hash = crypt(%s, code_hash)",
+            (code,),
+        ).fetchone()
+        if admin:
+            conn.execute(
+                "update app_users set role = %s, last_seen_at = now() "
+                "where telegram_id = %s",
+                (admin["role"], user["telegram_id"]),
+            )
+            log_action(conn, user, "admin_login", "app_user", user["telegram_id"],
+                       {"role": admin["role"]})
+            return {
+                "kind": "admin",
+                "role": admin["role"],
+                "role_title": ADMIN_ROLE_TITLES.get(admin["role"], admin["role"]),
+            }
+
+    raise HTTPException(
+        status_code=404,
+        detail="Код не распознан. Проверьте ГРЗ машины или код доступа.",
+    )
+
+
 # ============================================================
 #   Водитель
 # ============================================================
@@ -230,6 +306,63 @@ def driver_login(payload: CodeIn, user: dict = Depends(current_user)) -> dict:
                    {"plate": vehicle["plate"]})
 
     return {"vehicle": vehicle, "period": period}
+
+
+def _driver_plate(user: dict) -> str:
+    plate = user.get("vehicle_plate")
+    if not plate:
+        raise HTTPException(status_code=409, detail="Сначала введите код машины")
+    return plate
+
+
+@app.get("/api/driver/profile")
+def driver_profile(user: dict = Depends(current_user)) -> dict:
+    """Профиль водителя: ФИО, права, закреплённая техника, кол-во путевых."""
+    plate = _driver_plate(user)
+    with db() as conn:
+        v = conn.execute("select * from vehicles where plate = %s", (plate,)).fetchone()
+        n = conn.execute(
+            "select count(*) as n from waybills where plate = %s", (plate,)
+        ).fetchone()["n"]
+    return {
+        "plate": plate,
+        "full_name": (v or {}).get("driver_name"),
+        "license_number": (v or {}).get("driver_license"),
+        "model": (v or {}).get("model"),
+        "closed_docs": n,
+    }
+
+
+@app.get("/api/driver/vehicle")
+def driver_vehicle(user: dict = Depends(current_user)) -> dict:
+    """Всё о машине водителя (в т.ч. VIN, двигатель, сроки документов)."""
+    plate = _driver_plate(user)
+    with db() as conn:
+        v = conn.execute("select * from vehicles where plate = %s", (plate,)).fetchone()
+    if not v:
+        raise HTTPException(status_code=404, detail="Машина не найдена")
+    return v
+
+
+@app.get("/api/driver/waybills")
+def driver_waybills(user: dict = Depends(current_user)) -> list:
+    """История путевых листов водителя (по его машине)."""
+    plate = _driver_plate(user)
+    with db() as conn:
+        return conn.execute(
+            """
+            select w.id, w.waybill_no, w.plate, w.created_at,
+                   w.km_total_odo, w.fuel_in, w.fuel_spent, w.fuel_calc,
+                   w.tank_start, w.tank_end, w.motohours, w.is_ok,
+                   p.name as period_name
+            from waybills w
+            join periods p on p.id = w.period_id
+            where w.plate = %s
+            order by w.created_at desc
+            limit 200
+            """,
+            (plate,),
+        ).fetchall()
 
 
 @app.post("/api/waybill/check")
@@ -474,39 +607,62 @@ def admin_report(period_id: int, user: dict = Depends(require_admin)) -> dict:
 
 @app.get("/api/admin/summary")
 def admin_summary(period_id: int, user: dict = Depends(require_admin)) -> dict:
-    """Сводка по машинам за период."""
+    """Сводка по машинам за период, с раскрытием на отдельные путевые.
+
+    По машине отдаётся суммарный пробег/топливо, а в items — каждый путевой.
+    """
     with db() as conn:
         period = conn.execute(
             "select * from periods where id = %s", (period_id,)
         ).fetchone()
         if not period:
             raise HTTPException(status_code=404, detail="Период не найден")
-        rows = conn.execute(
+        records = conn.execute(
             """
-            select plate, model,
-                   count(*)              as wb_count,
-                   coalesce(sum(km_total_odo), 0) as total_km,
-                   coalesce(sum(fuel_in), 0)      as fuel_in,
-                   coalesce(sum(fuel_spent), 0)   as fuel_spent,
-                   coalesce(sum(fuel_calc), 0)    as fuel_calc
+            select id, plate, model, waybill_no, km_total_odo, fuel_in,
+                   fuel_spent, fuel_calc, is_ok
             from waybills
             where period_id = %s
-            group by plate, model
+            order by plate, created_at
             """,
             (period_id,),
         ).fetchall()
+
+    groups: dict[str, dict] = {}
+    for r in records:
+        g = groups.setdefault(r["plate"], {
+            "plate": r["plate"], "model": r["model"], "wb_count": 0,
+            "total_km": 0.0, "fuel_in": 0.0, "fuel_spent": 0.0, "fuel_calc": 0.0,
+            "has_bad": False, "items": [],
+        })
+        g["wb_count"] += 1
+        g["total_km"] += float(r["km_total_odo"])
+        g["fuel_in"] += float(r["fuel_in"])
+        g["fuel_spent"] += float(r["fuel_spent"])
+        g["fuel_calc"] += float(r["fuel_calc"])
+        if not r["is_ok"]:
+            g["has_bad"] = True
+        g["items"].append({
+            "id": r["id"],
+            "waybill_no": r["waybill_no"],
+            "total_km": float(r["km_total_odo"]),
+            "fuel_in": float(r["fuel_in"]),
+            "fuel_spent": float(r["fuel_spent"]),
+            "fuel_calc": float(r["fuel_calc"]),
+            "is_ok": r["is_ok"],
+        })
 
     def sort_key(p: str):
         digits = "".join(ch for ch in p if ch.isdigit())
         return (0, int(digits)) if digits else (1, p)
 
-    rows.sort(key=lambda r: sort_key(r["plate"]))
+    rows = [groups[p] for p in sorted(groups, key=sort_key)]
     totals = {
         "wb_count": sum(r["wb_count"] for r in rows),
-        "total_km": sum(float(r["total_km"]) for r in rows),
-        "fuel_in": sum(float(r["fuel_in"]) for r in rows),
-        "fuel_spent": sum(float(r["fuel_spent"]) for r in rows),
-        "fuel_calc": sum(float(r["fuel_calc"]) for r in rows),
+        "total_km": sum(r["total_km"] for r in rows),
+        "fuel_in": sum(r["fuel_in"] for r in rows),
+        "fuel_spent": sum(r["fuel_spent"] for r in rows),
+        "fuel_calc": sum(r["fuel_calc"] for r in rows),
     }
     return {"period": period, "rows": rows, "totals": totals}
 
@@ -532,4 +688,110 @@ def admin_vehicles(user: dict = Depends(require_admin)) -> list:
     with db() as conn:
         return conn.execute(
             "select * from vehicles order by plate"
+        ).fetchall()
+
+
+@app.get("/api/admin/vehicles/{vehicle_id}")
+def admin_vehicle(vehicle_id: int, user: dict = Depends(require_admin)) -> dict:
+    with db() as conn:
+        v = conn.execute("select * from vehicles where id = %s", (vehicle_id,)).fetchone()
+    if not v:
+        raise HTTPException(status_code=404, detail="Машина не найдена")
+    return v
+
+
+@app.post("/api/admin/vehicles/save")
+def admin_vehicle_save(payload: VehicleIn, user: dict = Depends(require_admin)) -> dict:
+    """Создание или обновление машины (техник роты)."""
+    plate = (payload.plate or "").strip()
+    if not plate.isdigit() or len(plate) != 4:
+        raise HTTPException(status_code=400, detail="ГРЗ — ровно 4 цифры")
+
+    data = {
+        "plate": plate,
+        "model": payload.model or "",
+        "fuel_norm": payload.fuel_norm,
+        "motohour_norm": payload.motohour_norm,
+        "tank_capacity": payload.tank_capacity,
+        "is_active": payload.is_active,
+        "vin": payload.vin,
+        "engine_no": payload.engine_no,
+        "chassis_no": payload.chassis_no,
+        "driver_name": payload.driver_name,
+        "driver_license": payload.driver_license,
+        "sts_expires": parse_optional_date(payload.sts_expires),
+        "diagnostic_card_expires": parse_optional_date(payload.diagnostic_card_expires),
+        "red_stripe_expires": parse_optional_date(payload.red_stripe_expires),
+    }
+
+    with db() as conn:
+        if payload.id:
+            data["id"] = payload.id
+            row = conn.execute(
+                """
+                update vehicles set
+                    plate=%(plate)s, model=%(model)s, fuel_norm=%(fuel_norm)s,
+                    motohour_norm=%(motohour_norm)s, tank_capacity=%(tank_capacity)s,
+                    is_active=%(is_active)s, vin=%(vin)s, engine_no=%(engine_no)s,
+                    chassis_no=%(chassis_no)s, driver_name=%(driver_name)s,
+                    driver_license=%(driver_license)s, sts_expires=%(sts_expires)s,
+                    diagnostic_card_expires=%(diagnostic_card_expires)s,
+                    red_stripe_expires=%(red_stripe_expires)s, updated_at=now()
+                where id = %(id)s
+                returning *
+                """,
+                data,
+            ).fetchone()
+            if not row:
+                raise HTTPException(status_code=404, detail="Машина не найдена")
+            action = "update_vehicle"
+        else:
+            row = conn.execute(
+                """
+                insert into vehicles
+                    (plate, model, fuel_norm, motohour_norm, tank_capacity,
+                     is_active, vin, engine_no, chassis_no, driver_name,
+                     driver_license, sts_expires, diagnostic_card_expires,
+                     red_stripe_expires)
+                values
+                    (%(plate)s, %(model)s, %(fuel_norm)s, %(motohour_norm)s,
+                     %(tank_capacity)s, %(is_active)s, %(vin)s, %(engine_no)s,
+                     %(chassis_no)s, %(driver_name)s, %(driver_license)s,
+                     %(sts_expires)s, %(diagnostic_card_expires)s,
+                     %(red_stripe_expires)s)
+                on conflict (plate) do update set
+                    model=excluded.model, fuel_norm=excluded.fuel_norm,
+                    motohour_norm=excluded.motohour_norm,
+                    tank_capacity=excluded.tank_capacity, is_active=excluded.is_active,
+                    vin=excluded.vin, engine_no=excluded.engine_no,
+                    chassis_no=excluded.chassis_no, driver_name=excluded.driver_name,
+                    driver_license=excluded.driver_license,
+                    sts_expires=excluded.sts_expires,
+                    diagnostic_card_expires=excluded.diagnostic_card_expires,
+                    red_stripe_expires=excluded.red_stripe_expires,
+                    updated_at=now()
+                returning *
+                """,
+                data,
+            ).fetchone()
+            action = "create_vehicle"
+
+        log_action(conn, user, action, "vehicle", row["id"], {"plate": plate})
+
+    return row
+
+
+@app.get("/api/admin/drivers")
+def admin_drivers(user: dict = Depends(require_admin)) -> list:
+    """Водительский состав: машина → водитель и число путевых."""
+    with db() as conn:
+        return conn.execute(
+            """
+            select v.id, v.plate, v.model, v.driver_name, v.driver_license,
+                   count(w.id) as waybill_count
+            from vehicles v
+            left join waybills w on w.vehicle_id = v.id
+            group by v.id, v.plate, v.model, v.driver_name, v.driver_license
+            order by v.plate
+            """
         ).fetchall()

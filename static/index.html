@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-<title>АВТР(ПГ) — проверка путевого</title>
+<title>АВТР(ПГ)</title>
 <script src="https://telegram.org/js/telegram-web-app.js"></script>
 <style>
   :root {
@@ -14,42 +14,42 @@
     --accent: var(--tg-theme-button-color, #4f8cff);
     --accent-text: var(--tg-theme-button-text-color, #ffffff);
     --border: rgba(128, 140, 170, 0.25);
-    --ok: #2ecc71;
-    --ok-bg: rgba(46, 204, 113, 0.14);
-    --bad: #ff5b5b;
-    --bad-bg: rgba(255, 91, 91, 0.14);
+    --ok: #2ecc71; --ok-bg: rgba(46, 204, 113, 0.14);
+    --bad: #ff5b5b; --bad-bg: rgba(255, 91, 91, 0.14);
+    --warn: #ffb84d;
   }
   * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
   html, body { margin: 0; padding: 0; }
   body {
     background: var(--bg); color: var(--text); min-height: 100vh;
-    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-    font-size: 16px; transition: background .2s, color .2s;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; font-size: 16px;
+    transition: background .2s, color .2s;
   }
-  .screen { display: none; padding: 20px 16px 32px; max-width: 520px; margin: 0 auto; }
+  .screen { display: none; padding: 20px 16px 40px; max-width: 520px; margin: 0 auto; }
   .screen.active { display: block; animation: fade .25s ease; }
-  @keyframes fade { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+  @keyframes fade { from { opacity: 0; transform: translateY(6px);} to { opacity: 1; transform: none;} }
 
   h1 { font-size: 22px; margin: 0 0 6px; font-weight: 800; }
-  .sub { color: var(--hint); font-size: 14px; margin: 0 0 22px; line-height: 1.45; }
-
+  h2 { font-size: 18px; margin: 0 0 12px; font-weight: 700; }
+  .sub { color: var(--hint); font-size: 14px; margin: 0 0 20px; line-height: 1.45; }
   .center { text-align: center; }
-  .logo { font-size: 54px; line-height: 1; margin: 24px 0 6px; }
+  .logo { font-size: 54px; line-height: 1; margin: 20px 0 6px; }
+  .muted { color: var(--hint); font-size: 14px; line-height: 1.5; }
 
   /* ---- Клавиатура кода ---- */
-  .pin-dots { display: flex; justify-content: center; gap: 14px; margin: 22px 0 8px; }
-  .dot { width: 16px; height: 16px; border-radius: 50%; background: transparent;
-         border: 2px solid var(--hint); transition: .15s; }
+  .pin-dots { display: flex; justify-content: center; gap: 14px; margin: 20px 0 4px; }
+  .dot { width: 16px; height: 16px; border-radius: 50%; border: 2px solid var(--hint); transition: .15s; }
   .dot.filled { background: var(--accent); border-color: var(--accent); transform: scale(1.08); }
-  .pin-error { color: var(--bad); font-size: 14px; min-height: 20px; margin: 6px 0 12px; }
+  .pin-error { color: var(--bad); font-size: 14px; min-height: 20px; margin: 6px 0 10px; }
   .keypad { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; max-width: 320px; margin: 0 auto; }
   .key {
-    height: 62px; border: none; border-radius: 16px; background: var(--card);
-    color: var(--text); font-size: 24px; font-weight: 700; cursor: pointer;
-    transition: transform .08s, background .15s;
+    height: 62px; border: none; border-radius: 16px; background: var(--card); color: var(--text);
+    font-size: 24px; font-weight: 700; cursor: pointer; transition: transform .08s, background .15s;
   }
   .key:active { transform: scale(.94); background: var(--border); }
-  .key.wide { font-size: 18px; }
+  .key.blank { background: transparent; pointer-events: none; }
+  .powered { text-align: center; margin-top: 26px; color: var(--hint); font-size: 13px; }
+  .powered b { color: var(--accent); font-weight: 800; }
 
   /* ---- Карточки ---- */
   .card { background: var(--card); border-radius: 18px; padding: 16px; margin-bottom: 14px; }
@@ -61,74 +61,78 @@
   .vehicle .meta { font-size: 13px; color: var(--hint); line-height: 1.5; }
   .vehicle .meta b { color: var(--text); font-weight: 600; }
 
+  .menu-item {
+    display: flex; align-items: center; gap: 14px; width: 100%; text-align: left;
+    background: var(--card); border: none; border-radius: 18px; padding: 16px;
+    color: var(--text); margin-bottom: 12px; cursor: pointer; transition: transform .08s;
+  }
+  .menu-item:active { transform: scale(.98); }
+  .menu-item .ico { font-size: 26px; width: 40px; text-align: center; }
+  .menu-item .t { font-size: 17px; font-weight: 700; }
+  .menu-item .d { font-size: 13px; color: var(--hint); margin-top: 2px; }
+  .menu-item.primary { background: var(--accent); color: var(--accent-text); }
+  .menu-item.primary .d { color: rgba(255,255,255,.75); }
+
+  .row { display: flex; justify-content: space-between; gap: 12px; padding: 9px 0; font-size: 15px; }
+  .row + .row { border-top: 1px solid var(--border); }
+  .row .l { color: var(--hint); }
+  .row .v { font-weight: 700; text-align: right; }
+  .row .v.ok { color: var(--ok); } .row .v.bad { color: var(--bad); } .row .v.warn { color: var(--warn); }
+
   .field { margin-bottom: 12px; }
   .field label { display: block; font-size: 13px; color: var(--hint); margin-bottom: 5px; }
   .field input {
     width: 100%; height: 48px; border-radius: 12px; border: 1.5px solid var(--border);
     background: var(--bg); color: var(--text); font-size: 17px; padding: 0 14px; outline: none;
-    transition: border-color .15s;
   }
   .field input:focus { border-color: var(--accent); }
   .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 0 12px; }
 
-  .btn {
-    width: 100%; height: 54px; border: none; border-radius: 16px; font-size: 17px;
-    font-weight: 700; cursor: pointer; transition: transform .08s, opacity .15s;
-  }
+  .btn { width: 100%; height: 54px; border: none; border-radius: 16px; font-size: 17px; font-weight: 700; cursor: pointer; }
   .btn:active { transform: scale(.98); }
   .btn.primary { background: var(--accent); color: var(--accent-text); }
   .btn.ghost { background: transparent; color: var(--accent); border: 1.5px solid var(--accent); }
   .btn:disabled { opacity: .5; }
   .btn + .btn { margin-top: 10px; }
 
-  /* ---- Результаты ---- */
-  .res-row { display: flex; justify-content: space-between; gap: 12px; padding: 7px 0; font-size: 15px; }
-  .res-row + .res-row { border-top: 1px solid var(--border); }
-  .res-row .l { color: var(--hint); }
-  .res-row .v { font-weight: 700; font-variant-numeric: tabular-nums; }
-  .res-group h3 { font-size: 14px; margin: 0 0 8px; color: var(--hint); font-weight: 600; }
-  .status {
-    border-radius: 16px; padding: 16px; text-align: center; font-weight: 800; font-size: 17px;
-    margin-bottom: 14px;
-  }
+  .status { border-radius: 16px; padding: 16px; text-align: center; font-weight: 800; font-size: 17px; margin-bottom: 14px; }
   .status.ok { background: var(--ok-bg); color: var(--ok); }
   .status.bad { background: var(--bad-bg); color: var(--bad); }
-  .v.ok { color: var(--ok); } .v.bad { color: var(--bad); }
 
-  .topbar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
+  .topbar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px; }
   .link { color: var(--accent); font-size: 14px; background: none; border: none; cursor: pointer; padding: 6px; }
+  .badge { display: inline-block; font-size: 11px; font-weight: 700; padding: 3px 8px; border-radius: 8px; }
+  .badge.ok { background: var(--ok-bg); color: var(--ok); }
+  .badge.bad { background: var(--bad-bg); color: var(--bad); }
+  .hist { background: var(--card); border-radius: 16px; padding: 14px 16px; margin-bottom: 10px; }
+  .hist .h { display: flex; justify-content: space-between; align-items: center; }
+  .hist .h b { font-size: 16px; }
+  .hist .kv { display: grid; grid-template-columns: 1fr 1fr; gap: 4px 12px; margin-top: 8px; font-size: 13px; color: var(--hint); }
+  .hist .kv b { color: var(--text); }
+  .empty { text-align: center; color: var(--hint); padding: 30px 10px; }
   .toast {
     position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%) translateY(120%);
     background: #111; color: #fff; padding: 12px 20px; border-radius: 14px; font-size: 14px;
     transition: transform .3s; max-width: 90%; text-align: center; z-index: 50;
   }
   .toast.show { transform: translateX(-50%) translateY(0); }
-  .muted { color: var(--hint); font-size: 14px; line-height: 1.5; }
-  .spinner {
-    width: 26px; height: 26px; border: 3px solid var(--border); border-top-color: var(--accent);
-    border-radius: 50%; margin: 40px auto; animation: spin 1s linear infinite;
-  }
+  .spinner { width: 26px; height: 26px; border: 3px solid var(--border); border-top-color: var(--accent);
+             border-radius: 50%; margin: 40px auto; animation: spin 1s linear infinite; }
   @keyframes spin { to { transform: rotate(360deg); } }
 </style>
 </head>
 <body>
 
-<!-- Загрузка -->
-<div class="screen active" id="scr-loading">
-  <div class="spinner"></div>
-  <p class="muted center">Подключение к Telegram…</p>
-</div>
+<div class="screen active" id="scr-loading"><div class="spinner"></div><p class="muted center">Подключение…</p></div>
 
-<!-- Вне Telegram -->
 <div class="screen" id="scr-outside">
   <div class="center">
     <div class="logo">🚧</div>
     <h1>Откройте через Telegram</h1>
-    <p class="sub">Это приложение работает внутри Telegram. Откройте его из бота <b>@resourseAVTR_bot</b> — кнопка «Открыть приложение».</p>
+    <p class="sub">Приложение работает внутри Telegram. Откройте бота <b>@resourseAVTR_bot</b> — кнопка «Открыть приложение».</p>
   </div>
 </div>
 
-<!-- Ошибка сервера -->
 <div class="screen" id="scr-error">
   <div class="center" style="margin-top:36px">
     <div class="logo">⚠️</div>
@@ -138,61 +142,74 @@
   </div>
 </div>
 
-<!-- Ввод кода машины -->
-<div class="screen" id="scr-pin">
+<!-- Единый экран входа -->
+<div class="screen" id="scr-lock">
   <div class="center">
-    <div class="logo" id="pin-logo">🚚</div>
+    <div class="logo">🚚</div>
     <h1>АВТР(ПГ)</h1>
-    <p class="sub">Введите код доступа — 4 цифры ГРЗ вашей машины</p>
+    <p class="sub">Введите код доступа</p>
   </div>
-  <div class="pin-dots" id="pin-dots">
-    <div class="dot"></div><div class="dot"></div><div class="dot"></div><div class="dot"></div>
-  </div>
+  <div class="pin-dots" id="dots"><div class="dot"></div><div class="dot"></div><div class="dot"></div><div class="dot"></div></div>
   <div class="pin-error center" id="pin-error"></div>
   <div class="keypad" id="keypad">
-    <button class="key" data-k="1">1</button>
-    <button class="key" data-k="2">2</button>
-    <button class="key" data-k="3">3</button>
-    <button class="key" data-k="4">4</button>
-    <button class="key" data-k="5">5</button>
-    <button class="key" data-k="6">6</button>
-    <button class="key" data-k="7">7</button>
-    <button class="key" data-k="8">8</button>
-    <button class="key" data-k="9">9</button>
-    <button class="key wide" data-k="admin">Админ</button>
-    <button class="key" data-k="0">0</button>
-    <button class="key wide" data-k="del">⌫</button>
-  </div>
-</div>
-
-<!-- Ввод кода админа -->
-<div class="screen" id="scr-admin-pin">
-  <div class="topbar"><button class="link" id="admin-back">← Назад</button><span></span></div>
-  <div class="center">
-    <div class="logo">🛠</div>
-    <h1>Вход администратора</h1>
-    <p class="sub">Введите код доступа администратора</p>
-  </div>
-  <div class="pin-dots" id="apin-dots">
-    <div class="dot"></div><div class="dot"></div><div class="dot"></div><div class="dot"></div>
-  </div>
-  <div class="pin-error center" id="apin-error"></div>
-  <div class="keypad" id="apin-keypad">
     <button class="key" data-k="1">1</button><button class="key" data-k="2">2</button>
     <button class="key" data-k="3">3</button><button class="key" data-k="4">4</button>
     <button class="key" data-k="5">5</button><button class="key" data-k="6">6</button>
     <button class="key" data-k="7">7</button><button class="key" data-k="8">8</button>
-    <button class="key" data-k="9">9</button><button class="key wide" data-k="empty"></button>
-    <button class="key" data-k="0">0</button><button class="key wide" data-k="del">⌫</button>
+    <button class="key" data-k="9">9</button><button class="key blank"></button>
+    <button class="key" data-k="0">0</button><button class="key" data-k="del">⌫</button>
   </div>
+  <div class="powered">powered by <b>botvinev</b></div>
+</div>
+
+<!-- Главное меню водителя -->
+<div class="screen" id="scr-menu">
+  <div class="topbar">
+    <div><h1 id="menu-hello">Здравствуйте!</h1><p class="sub" id="menu-sub">—</p></div>
+    <button class="link" id="logout">Выйти</button>
+  </div>
+  <button class="menu-item primary" id="m-new">
+    <span class="ico">📝</span>
+    <span><span class="t">Новый путевой</span><div class="d">Проверить и отправить</div></span>
+  </button>
+  <button class="menu-item" id="m-history">
+    <span class="ico">📋</span>
+    <span><span class="t">Мои путёвки</span><div class="d">История проверенных</div></span>
+  </button>
+  <button class="menu-item" id="m-vehicle">
+    <span class="ico">🚚</span>
+    <span><span class="t">Моя машина</span><div class="d">Документы и характеристики</div></span>
+  </button>
+  <button class="menu-item" id="m-profile">
+    <span class="ico">👤</span>
+    <span><span class="t">Профиль</span><div class="d">Водитель и закреплённая техника</div></span>
+  </button>
+</div>
+
+<!-- Мои путёвки -->
+<div class="screen" id="scr-history">
+  <div class="topbar"><button class="link" id="hist-back">← Меню</button><span></span></div>
+  <h2>Мои путёвки</h2>
+  <div id="hist-list"><div class="spinner"></div></div>
+</div>
+
+<!-- Моя машина -->
+<div class="screen" id="scr-vehicle">
+  <div class="topbar"><button class="link" id="veh-back">← Меню</button><span></span></div>
+  <h2>Моя машина</h2>
+  <div id="veh-body"><div class="spinner"></div></div>
+</div>
+
+<!-- Профиль -->
+<div class="screen" id="scr-profile">
+  <div class="topbar"><button class="link" id="prof-back">← Меню</button><span></span></div>
+  <h2>Профиль</h2>
+  <div id="prof-body"><div class="spinner"></div></div>
 </div>
 
 <!-- Форма путевого -->
 <div class="screen" id="scr-form">
-  <div class="topbar">
-    <button class="link" id="change-vehicle">← Сменить машину</button>
-    <button class="link" id="to-admin">Админ</button>
-  </div>
+  <div class="topbar"><button class="link" id="form-back">← Меню</button><span></span></div>
   <div class="card vehicle">
     <div class="plate" id="v-plate">—</div>
     <div class="meta">
@@ -201,7 +218,6 @@
       <div>Отчёт: <b id="v-period">—</b></div>
     </div>
   </div>
-
   <div class="card">
     <div class="grid2">
       <div class="field"><label>№ путевого листа</label><input id="f-waybill" inputmode="numeric" placeholder="напр. 123" /></div>
@@ -217,39 +233,33 @@
       <div class="field"><label>Моточасы</label><input id="f-motohours" inputmode="decimal" placeholder="0" /></div>
     </div>
   </div>
-
   <button class="btn primary" id="btn-check">Проверить</button>
-  <button class="btn ghost" id="btn-save" style="display:none">Отправить на сервер</button>
 </div>
 
 <!-- Результат -->
 <div class="screen" id="scr-result">
   <div class="topbar"><button class="link" id="res-back">← Изменить данные</button><span></span></div>
   <div class="status" id="res-status">—</div>
-
-  <div class="card res-group">
-    <h3>⛽ Расчёт топлива</h3>
-    <div class="res-row"><span class="l">P1 (без груза, −15%)</span><span class="v" id="r-p1">—</span></div>
-    <div class="res-row"><span class="l">P2 (с грузом)</span><span class="v" id="r-p2">—</span></div>
-    <div class="res-row"><span class="l">H (моточасы)</span><span class="v" id="r-h">—</span></div>
-    <div class="res-row"><span class="l">P (итого топливо)</span><span class="v" id="r-p">—</span></div>
+  <div class="card">
+    <h3 style="margin:0 0 8px;font-size:14px;color:var(--hint)">⛽ Расчёт топлива</h3>
+    <div class="row"><span class="l">P1 (без груза, −15%)</span><span class="v" id="r-p1">—</span></div>
+    <div class="row"><span class="l">P2 (с грузом)</span><span class="v" id="r-p2">—</span></div>
+    <div class="row"><span class="l">H (моточасы)</span><span class="v" id="r-h">—</span></div>
+    <div class="row"><span class="l">P (итого топливо)</span><span class="v" id="r-p">—</span></div>
   </div>
-
-  <div class="card res-group">
-    <h3>📍 Километраж</h3>
-    <div class="res-row"><span class="l">Общий пробег (одометр)</span><span class="v" id="r-odo">—</span></div>
-    <div class="res-row"><span class="l">Пробег (с+без груза)</span><span class="v" id="r-input">—</span></div>
-    <div class="res-row"><span class="l">Расхождение</span><span class="v" id="r-kmdiff">—</span></div>
+  <div class="card">
+    <h3 style="margin:0 0 8px;font-size:14px;color:var(--hint)">📍 Километраж</h3>
+    <div class="row"><span class="l">Общий пробег (одометр)</span><span class="v" id="r-odo">—</span></div>
+    <div class="row"><span class="l">Пробег (с+без груза)</span><span class="v" id="r-input">—</span></div>
+    <div class="row"><span class="l">Расхождение</span><span class="v" id="r-kmdiff">—</span></div>
   </div>
-
-  <div class="card res-group">
-    <h3>🛢 Баки</h3>
-    <div class="res-row"><span class="l">Бак на конец (расчёт)</span><span class="v" id="r-tankcalc">—</span></div>
-    <div class="res-row"><span class="l">Бак на конец (введено)</span><span class="v" id="r-tankend">—</span></div>
-    <div class="res-row"><span class="l">Затрачено (введено)</span><span class="v" id="r-spent">—</span></div>
-    <div class="res-row"><span class="l">Затрачено (расчёт)</span><span class="v" id="r-spentcalc">—</span></div>
+  <div class="card">
+    <h3 style="margin:0 0 8px;font-size:14px;color:var(--hint)">🛢 Баки</h3>
+    <div class="row"><span class="l">Бак на конец (расчёт)</span><span class="v" id="r-tankcalc">—</span></div>
+    <div class="row"><span class="l">Бак на конец (введено)</span><span class="v" id="r-tankend">—</span></div>
+    <div class="row"><span class="l">Затрачено (введено)</span><span class="v" id="r-spent">—</span></div>
+    <div class="row"><span class="l">Затрачено (расчёт)</span><span class="v" id="r-spentcalc">—</span></div>
   </div>
-
   <button class="btn primary" id="btn-confirm">Отправить на сервер</button>
 </div>
 
@@ -257,36 +267,34 @@
 
 <script>
 const tg = window.Telegram && window.Telegram.WebApp ? window.Telegram.WebApp : null;
-let session = null;         // { role, name, vehicle_plate, is_admin }
-let vehicle = null;         // текущая машина
-let pinBuffer = "";
-let adminPinBuffer = "";
-let lastPayload = null;
+let session = null, vehicle = null, pin = "", lastPayload = null;
 
 const $ = (id) => document.getElementById(id);
 const api = async (path, opts = {}) => {
-  const res = await fetch(path, {
-    ...opts,
-    headers: {
-      "Content-Type": "application/json",
-      "X-Telegram-Init-Data": tg ? tg.initData : "",
-      ...(opts.headers || {}),
-    },
-  });
+  const res = await fetch(path, { ...opts, headers: {
+    "Content-Type": "application/json",
+    "X-Telegram-Init-Data": tg ? tg.initData : "", ...(opts.headers || {}) } });
   const data = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error(data.detail || "Ошибка сервера");
   return data;
 };
 const show = (id) => {
-  document.querySelectorAll(".screen").forEach((s) => s.classList.remove("active"));
-  $(id).classList.add("active");
-  if (tg) tg.expand();
+  document.querySelectorAll(".screen").forEach(s => s.classList.remove("active"));
+  $(id).classList.add("active"); if (tg) tg.expand();
 };
-const toast = (msg) => {
-  const t = $("toast"); t.textContent = msg; t.classList.add("show");
-  clearTimeout(t._t); t._t = setTimeout(() => t.classList.remove("show"), 2600);
-};
+const esc = (s) => String(s ?? "").replace(/[&<>"]/g, c => ({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;" }[c]));
 const num = (id) => parseFloat(($(id).value || "0").replace(",", ".")) || 0;
+const nf = (v, d = 1) => Number(v ?? 0).toFixed(d);
+const toast = (m) => { const t = $("toast"); t.textContent = m; t.classList.add("show");
+  clearTimeout(t._t); t._t = setTimeout(() => t.classList.remove("show"), 2600); };
+const dstr = (s) => s ? new Date(s).toLocaleDateString("ru-RU") : "—";
+function expiryClass(iso) {
+  if (!iso) return "";
+  const days = (new Date(iso) - new Date()) / 86400000;
+  if (days < 0) return "bad";
+  if (days < 30) return "warn";
+  return "ok";
+}
 
 /* ---------- Инициализация ---------- */
 async function boot() {
@@ -294,157 +302,188 @@ async function boot() {
   tg.ready();
   await loadSession();
 }
-
 async function loadSession() {
-  try {
-    session = await api("/api/session", { method: "POST" });
-  } catch (e) {
-    $("err-text").textContent = e.message;
-    show("scr-error");
-    return;
-  }
+  try { session = await api("/api/session", { method: "POST" }); }
+  catch (e) { $("err-text").textContent = e.message; show("scr-error"); return; }
   if (session.is_admin) { window.location.href = "/admin"; return; }
-  openPin();
+  openLock();
 }
 
-/* ---------- Ввод кода машины ---------- */
-function openPin() {
-  pinBuffer = ""; $("pin-error").textContent = ""; renderDots("pin-dots", pinBuffer);
-  show("scr-pin");
+/* ---------- Вход ---------- */
+function openLock() {
+  pin = ""; $("pin-error").textContent = ""; renderDots();
+  show("scr-lock");
 }
-function renderDots(id, val) {
-  $(id).querySelectorAll(".dot").forEach((d, i) => d.classList.toggle("filled", i < val.length));
-}
+function renderDots() { $("dots").querySelectorAll(".dot").forEach((d, i) => d.classList.toggle("filled", i < pin.length)); }
+$("keypad").addEventListener("click", (e) => {
+  const k = e.target.dataset.k; if (!k) return;
+  if (k === "del") pin = pin.slice(0, -1); else if (pin.length < 4) pin += k;
+  renderDots(); $("pin-error").textContent = "";
+  if (pin.length === 4) setTimeout(submitPin, 120);
+});
 async function submitPin() {
   try {
-    const data = await api("/api/driver/login", {
-      method: "POST", body: JSON.stringify({ code: pinBuffer }),
-    });
+    const data = await api("/api/login", { method: "POST", body: JSON.stringify({ code: pin }) });
+    if (data.kind === "admin") { window.location.href = "/admin"; return; }
     vehicle = data.vehicle;
-    fillVehicle(data.period);
-    show("scr-form");
     if (tg.HapticFeedback) tg.HapticFeedback.notificationOccurred("success");
+    openMenu();
   } catch (e) {
-    $("pin-error").textContent = e.message;
-    pinBuffer = ""; renderDots("pin-dots", "");
+    $("pin-error").textContent = e.message; pin = ""; renderDots();
     if (tg.HapticFeedback) tg.HapticFeedback.notificationOccurred("error");
   }
 }
-function fillVehicle(period) {
+$("logout").addEventListener("click", async () => {
+  try { await api("/api/logout", { method: "POST" }); } catch (e) {}
+  openLock();
+});
+
+/* ---------- Меню ---------- */
+function openMenu() {
+  const name = (session && session.name) ? session.name.split(" (@")[0] : "";
+  $("menu-hello").textContent = name ? `Здравствуйте, ${name}!` : "Здравствуйте!";
+  $("menu-sub").textContent = `Машина ${vehicle.plate} · ${vehicle.model || "—"}`;
+  show("scr-menu");
+}
+$("m-new").addEventListener("click", () => {
   $("v-plate").textContent = vehicle.plate;
   $("v-model").textContent = vehicle.model || "—";
   $("v-norm").textContent = vehicle.fuel_norm;
   $("v-moto").textContent = vehicle.motohour_norm;
-  $("v-period").textContent = period ? period.name : "не задан";
+  $("v-period").textContent = "по дате путевого";
   $("f-date").value = new Date().toISOString().slice(0, 10);
-}
-
-$("keypad").addEventListener("click", (e) => {
-  const k = e.target.dataset.k; if (!k) return;
-  if (k === "del") pinBuffer = pinBuffer.slice(0, -1);
-  else if (k === "admin") { openAdminPin(); return; }
-  else if (pinBuffer.length < 4) pinBuffer += k;
-  renderDots("pin-dots", pinBuffer);
-  $("pin-error").textContent = "";
-  if (pinBuffer.length === 4) setTimeout(submitPin, 120);
+  $("f-waybill").value = "";
+  ["km_start","km_end","km_empty","km_loaded","tank_start","fuel_in","tank_end","fuel_spent","motohours"]
+    .forEach(f => $("f-" + f).value = "");
+  show("scr-form");
 });
+$("m-history").addEventListener("click", loadHistory);
+$("m-vehicle").addEventListener("click", loadVehicle);
+$("m-profile").addEventListener("click", loadProfile);
+$("form-back").addEventListener("click", openMenu);
+$("hist-back").addEventListener("click", openMenu);
+$("veh-back").addEventListener("click", openMenu);
+$("prof-back").addEventListener("click", openMenu);
 
-/* ---------- Ввод кода админа ---------- */
-function openAdminPin() {
-  adminPinBuffer = ""; $("apin-error").textContent = ""; renderDots("apin-dots", "");
-  show("scr-admin-pin");
-}
-$("admin-back").addEventListener("click", openPin);
-$("apin-keypad").addEventListener("click", (e) => {
-  const k = e.target.dataset.k; if (!k || k === "empty") return;
-  if (k === "del") adminPinBuffer = adminPinBuffer.slice(0, -1);
-  else if (adminPinBuffer.length < 4) adminPinBuffer += k;
-  renderDots("apin-dots", adminPinBuffer);
-  $("apin-error").textContent = "";
-  if (adminPinBuffer.length === 4) setTimeout(submitAdminPin, 120);
-});
-async function submitAdminPin() {
+/* ---------- Мои путёвки ---------- */
+async function loadHistory() {
+  show("scr-history"); $("hist-list").innerHTML = '<div class="spinner"></div>';
   try {
-    await api("/api/admin/login", {
-      method: "POST", body: JSON.stringify({ code: adminPinBuffer }),
-    });
-    window.location.href = "/admin";
-  } catch (e) {
-    $("apin-error").textContent = e.message;
-    adminPinBuffer = ""; renderDots("apin-dots", "");
-  }
+    const rows = await api("/api/driver/waybills");
+    if (!rows.length) { $("hist-list").innerHTML = '<div class="empty">Путёвок пока нет</div>'; return; }
+    $("hist-list").innerHTML = rows.map(r => `
+      <div class="hist">
+        <div class="h"><b>Путевой №${esc(r.waybill_no)}</b>
+          <span class="badge ${r.is_ok ? "ok" : "bad"}">${r.is_ok ? "OK" : "РАСХОЖДЕНИЕ"}</span></div>
+        <div class="muted" style="font-size:12px;margin-top:4px">${esc(r.period_name)} · ${dstr(r.created_at)}</div>
+        <div class="kv">
+          <span>Пробег: <b>${nf(r.km_total_odo)} км</b></span>
+          <span>Топливо: <b>${nf(r.fuel_spent)} л</b></span>
+        </div>
+      </div>`).join("");
+  } catch (e) { $("hist-list").innerHTML = `<div class="empty">${esc(e.message)}</div>`; }
 }
 
-/* ---------- Форма путевого ---------- */
+/* ---------- Моя машина ---------- */
+function vehRow(label, value, cls) {
+  return `<div class="row"><span class="l">${label}</span><span class="v ${cls || ""}">${esc(value || "—")}</span></div>`;
+}
+async function loadVehicle() {
+  show("scr-vehicle"); $("veh-body").innerHTML = '<div class="spinner"></div>';
+  try {
+    const v = await api("/api/driver/vehicle");
+    $("veh-body").innerHTML = `
+      <div class="card vehicle">
+        <div class="plate">${esc(v.plate)}</div>
+        <div class="meta"><div>Модель: <b>${esc(v.model || "—")}</b></div>
+        <div>Норма: <b>${v.fuel_norm}</b> л/100км · <b>${v.motohour_norm}</b> л/моточас</div></div>
+      </div>
+      <div class="card">
+        <h3 style="margin:0 0 8px;font-size:14px;color:var(--hint)">🔧 Характеристики</h3>
+        ${vehRow("VIN", v.vin)}
+        ${vehRow("Двигатель", v.engine_no)}
+        ${vehRow("Шасси", v.chassis_no)}
+        ${vehRow("Объём бака", v.tank_capacity ? v.tank_capacity + " л" : null)}
+      </div>
+      <div class="card">
+        <h3 style="margin:0 0 8px;font-size:14px;color:var(--hint)">👤 Водитель</h3>
+        ${vehRow("ФИО", v.driver_name)}
+        ${vehRow("Права", v.driver_license)}
+      </div>
+      <div class="card">
+        <h3 style="margin:0 0 8px;font-size:14px;color:var(--hint)">📄 Документы (срок действия)</h3>
+        ${vehRow("СТС", dstr(v.sts_expires), expiryClass(v.sts_expires))}
+        ${vehRow("Диагност. карта", dstr(v.diagnostic_card_expires), expiryClass(v.diagnostic_card_expires))}
+        ${vehRow("Красная полоса", dstr(v.red_stripe_expires), expiryClass(v.red_stripe_expires))}
+      </div>
+      <p class="muted" style="font-size:12px;text-align:center">Данные заполняет техник роты</p>`;
+  } catch (e) { $("veh-body").innerHTML = `<div class="empty">${esc(e.message)}</div>`; }
+}
+
+/* ---------- Профиль ---------- */
+async function loadProfile() {
+  show("scr-profile"); $("prof-body").innerHTML = '<div class="spinner"></div>';
+  try {
+    const p = await api("/api/driver/profile");
+    $("prof-body").innerHTML = `
+      <div class="card">
+        ${vehRow("ФИО", p.full_name)}
+        ${vehRow("Номер прав", p.license_number)}
+        ${vehRow("Закреплённая техника", p.plate + (p.model ? " · " + p.model : ""))}
+        ${vehRow("Закрыто документации", String(p.closed_docs))}
+      </div>`;
+  } catch (e) { $("prof-body").innerHTML = `<div class="empty">${esc(e.message)}</div>`; }
+}
+
+/* ---------- Форма и проверка ---------- */
 const FIELD_IDS = ["km_start","km_end","km_empty","km_loaded","tank_start","fuel_in","tank_end","fuel_spent","motohours"];
-
 function collect() {
-  const payload = { plate: vehicle.plate, waybill_no: $("f-waybill").value.trim(), date: $("f-date").value };
-  FIELD_IDS.forEach((f) => payload[f] = num("f-" + f));
-  return payload;
+  const p = { plate: vehicle.plate, waybill_no: $("f-waybill").value.trim(), date: $("f-date").value };
+  FIELD_IDS.forEach(f => p[f] = num("f-" + f));
+  return p;
 }
-
 $("btn-check").addEventListener("click", async () => {
   try {
     const payload = collect();
     if (!payload.waybill_no) return toast("Укажите номер путевого листа");
     const data = await api("/api/waybill/check", { method: "POST", body: JSON.stringify(payload) });
     lastPayload = payload;
-    if (data.duplicate) toast("Внимание: путевой с таким номером уже есть");
+    if (data.duplicate) toast("Внимание: такой путевой уже есть");
     renderResult(data.result);
-    $("btn-save").style.display = "none";
     show("scr-result");
   } catch (e) { toast(e.message); }
 });
-
-$("btn-save").addEventListener("click", doSave);
-$("btn-confirm").addEventListener("click", doSave);
-async function doSave() {
+$("btn-confirm").addEventListener("click", async () => {
+  const b = $("btn-confirm");
   try {
-    if (!lastPayload) return;
-    const btn = $("btn-confirm");
-    btn.disabled = true; btn.textContent = "Отправка…";
+    b.disabled = true; b.textContent = "Отправка…";
     await api("/api/waybill/save", { method: "POST", body: JSON.stringify(lastPayload) });
     if (tg.HapticFeedback) tg.HapticFeedback.notificationOccurred("success");
-    toast("Путевой отправлен на сервер ✓");
-    setTimeout(() => { openPin(); }, 900);
-  } catch (e) {
-    toast(e.message);
-  } finally {
-    const btn = $("btn-confirm");
-    btn.disabled = false; btn.textContent = "Отправить на сервер";
-  }
-}
-
-function setVal(id, text, state) {
-  const el = $(id); el.textContent = text;
-  el.classList.remove("ok", "bad");
-  if (state) el.classList.add(state);
+    toast("Путевой отправлен ✓");
+    setTimeout(openMenu, 900);
+  } catch (e) { toast(e.message); }
+  finally { b.disabled = false; b.textContent = "Отправить на сервер"; }
+});
+function setVal(id, text, cls) {
+  const el = $(id); el.textContent = text; el.classList.remove("ok", "bad");
+  if (cls) el.classList.add(cls);
 }
 function renderResult(d) {
   setVal("r-p1", d.p1 + " л"); setVal("r-p2", d.p2 + " л");
-  setVal("r-h", d.h + " л");   setVal("r-p", d.fuel_calc + " л");
-
-  setVal("r-odo", d.km_total_odo.toFixed(1) + " км", d.km_ok ? "ok" : "bad");
-  setVal("r-input", d.km_total_input.toFixed(1) + " км", d.km_ok ? "ok" : "bad");
+  setVal("r-h", d.h + " л"); setVal("r-p", d.fuel_calc + " л");
+  setVal("r-odo", nf(d.km_total_odo) + " км", d.km_ok ? "ok" : "bad");
+  setVal("r-input", nf(d.km_total_input) + " км", d.km_ok ? "ok" : "bad");
   setVal("r-kmdiff", d.km_ok ? "0 км" : (d.km_total_odo - d.km_total_input).toFixed(2) + " км", d.km_ok ? "ok" : "bad");
-
-  setVal("r-tankcalc", d.tank_end_calc.toFixed(1) + " л", d.tank_ok ? "ok" : "bad");
-  setVal("r-tankend", d.tank_end.toFixed(1) + " л", d.tank_ok ? "ok" : "bad");
-  setVal("r-spent", d.fuel_spent.toFixed(1) + " л", d.fuel_ok ? "ok" : "bad");
+  setVal("r-tankcalc", nf(d.tank_end_calc) + " л", d.tank_ok ? "ok" : "bad");
+  setVal("r-tankend", nf(d.tank_end) + " л", d.tank_ok ? "ok" : "bad");
+  setVal("r-spent", nf(d.fuel_spent) + " л", d.fuel_ok ? "ok" : "bad");
   setVal("r-spentcalc", d.fuel_calc + " л", d.fuel_ok ? "ok" : "bad");
-
   const st = $("res-status");
   st.className = "status " + (d.is_ok ? "ok" : "bad");
   st.textContent = d.is_ok ? "✔  Данные корректны" : "⚠  Обнаружены расхождения";
 }
-
 $("res-back").addEventListener("click", () => show("scr-form"));
-$("change-vehicle").addEventListener("click", openPin);
-$("to-admin").addEventListener("click", openAdminPin);
 $("err-retry").addEventListener("click", loadSession);
-
-/* ---------- Тема ---------- */
 if (tg && tg.onEvent) tg.onEvent("themeChanged", () => location.reload());
 boot();
 </script>
