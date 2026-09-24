@@ -429,32 +429,41 @@ function openDriverCard(plate) {
 $("drv-back").addEventListener("click", () => { show("scr-panel"); render(); });
 
 /* ---------- Форма машины ---------- */
-const FORM_FIELDS = [
-  ["plate", "ГРЗ (4 цифры)", "text"],
-  ["model", "Модель", "text"],
-  ["fuel_norm", "Норма, л/100км", "decimal"],
-  ["motohour_norm", "Норма, л/моточас", "decimal"],
-  ["tank_capacity", "Объём бака, л", "decimal"],
-  ["driver_name", "ФИО водителя", "text"],
-  ["driver_rank", "Звание", "text"],
-  ["driver_position", "Должность", "text"],
-  ["driver_license", "Права (категории)", "text"],
-  ["vin", "VIN", "text"],
-  ["engine_no", "Двигатель", "text"],
-  ["chassis_no", "Шасси", "text"],
-  ["sts_expires", "СТС до", "date"],
-  ["diagnostic_card_expires", "Диагност. карта до", "date"],
-  ["red_stripe_expires", "Красная полоса до", "date"],
+const FORM_GROUPS = [
+  ["Основное", [["plate", "ГРЗ (4 цифры)", "text"], ["model", "Модель", "text"]]],
+  ["Нормы расхода", [
+    ["fuel_norm", "Норма, л/100км", "decimal"],
+    ["motohour_norm", "Норма, л/моточас", "decimal"],
+    ["tank_capacity", "Объём бака, л", "decimal"],
+  ]],
+  ["Характеристики", [
+    ["vin", "VIN", "text"], ["engine_no", "Двигатель", "text"], ["chassis_no", "Шасси", "text"],
+  ]],
+  ["Водитель", [
+    ["driver_name", "ФИО", "text"], ["driver_rank", "Звание", "text"],
+    ["driver_position", "Должность", "text"], ["driver_license", "Права (категории)", "text"],
+  ]],
+  ["Документы — срок действия", [
+    ["sts_expires", "СТС до", "date"],
+    ["diagnostic_card_expires", "Диагност. карта до", "date"],
+    ["red_stripe_expires", "Красная полоса до", "date"],
+  ]],
 ];
+const FORM_FIELDS = FORM_GROUPS.flatMap(g => g[1]);
+
 function openVehicleForm(v) {
   editing = v ? { ...v } : null;
   $("form-title").textContent = v ? `Машина ${v.plate}` : "Новая машина";
-  $("form").innerHTML = `<div class="grid2">` + FORM_FIELDS.map(([key, label, type]) => {
-    let val = v && v[key] != null ? v[key] : "";
-    if (type === "date" && val) val = String(val).slice(0, 10);
-    const inputmode = type === "date" ? "" : (type === "decimal" ? 'inputmode="decimal"' : 'inputmode="numeric"');
-    return `<div class="field"><label>${label}</label><input id="vf-${key}" type="${type === "date" ? "date" : "text"}" ${inputmode} value="${esc(val)}" /></div>`;
-  }).join("") + `</div>`;
+  $("form").innerHTML = FORM_GROUPS.map(([title, fields]) => `
+    <div style="margin-bottom:18px">
+      <div style="font-size:12px;font-weight:700;color:var(--hint);text-transform:uppercase;letter-spacing:.4px;margin-bottom:8px">${title}</div>
+      <div class="grid2">${fields.map(([key, label, type]) => {
+        let val = v && v[key] != null ? v[key] : "";
+        if (type === "date" && val) val = String(val).slice(0, 10);
+        const im = type === "date" ? "" : (type === "decimal" ? 'inputmode="decimal"' : 'inputmode="numeric"');
+        return `<div class="field"><label>${label}</label><input id="vf-${key}" type="${type === "date" ? "date" : "text"}" ${im} value="${esc(val)}" /></div>`;
+      }).join("")}</div>
+    </div>`).join("");
   show("scr-form");
 }
 $("form-back").addEventListener("click", () => { show("scr-panel"); render(); });
