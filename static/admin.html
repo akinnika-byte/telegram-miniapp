@@ -151,7 +151,7 @@ const nf = (v, d = 1) => Number(v).toFixed(d);
 async function boot() {
   if (!tg || !tg.initData) { document.body.innerHTML = "<div class='wrap'><h1>Откройте через Telegram</h1><p class='sub'>Панель доступна только внутри мини-приложения.</p></div>"; return; }
   tg.ready();
-  try { session = await api("/api/session"); }
+  try { session = await api("/api/session", { method: "POST" }); }
   catch (e) { document.body.innerHTML = "<div class='wrap'><h1>Ошибка</h1><p class='sub'>" + esc(e.message) + "</p></div>"; return; }
   if (!session.is_admin) { show("scr-login"); return; }
   startPanel();
@@ -168,7 +168,7 @@ $("keypad").addEventListener("click", (e) => {
 async function login() {
   try {
     await api("/api/admin/login", { method: "POST", body: JSON.stringify({ code: pin }) });
-    session = await api("/api/session");
+    session = await api("/api/session", { method: "POST" });
     startPanel();
   } catch (e) { $("err").textContent = e.message; pin = ""; renderDots(); }
 }

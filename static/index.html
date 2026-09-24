@@ -297,7 +297,7 @@ async function boot() {
 
 async function loadSession() {
   try {
-    session = await api("/api/session");
+    session = await api("/api/session", { method: "POST" });
   } catch (e) {
     $("err-text").textContent = e.message;
     show("scr-error");

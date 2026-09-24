@@ -156,12 +156,20 @@ def parse_date(value: Optional[str]) -> date:
 # ============================================================
 @app.get("/", include_in_schema=False)
 def index() -> FileResponse:
-    return FileResponse(STATIC_DIR / "index.html", media_type="text/html")
+    return FileResponse(
+        STATIC_DIR / "index.html",
+        media_type="text/html",
+        headers={"Cache-Control": "no-store"},
+    )
 
 
 @app.get("/admin", include_in_schema=False)
 def admin_page() -> FileResponse:
-    return FileResponse(STATIC_DIR / "admin.html", media_type="text/html")
+    return FileResponse(
+        STATIC_DIR / "admin.html",
+        media_type="text/html",
+        headers={"Cache-Control": "no-store"},
+    )
 
 
 @app.get("/api/health")
