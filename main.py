@@ -23,6 +23,7 @@ from config import (
     ADMIN_ROLES,
     ADMIN_ROLE_TITLES,
     BOT_TOKEN,
+    DATABASE_URL,
     INIT_DATA_MAX_AGE,
     STATIC_DIR,
 )
@@ -165,9 +166,22 @@ def admin_page() -> FileResponse:
 
 @app.get("/api/health")
 def health() -> dict:
+    """Диагностика: настроены ли бот и база, и доступна ли база."""
+    db_ok = False
+    db_error = None
+    if DATABASE_URL:
+        try:
+            with db() as conn:
+                conn.execute("select 1")
+            db_ok = True
+        except Exception as exc:  # noqa: BLE001
+            db_error = type(exc).__name__
     return {
         "status": "ok",
         "bot_configured": bool(BOT_TOKEN),
+        "db_configured": bool(DATABASE_URL),
+        "db_ok": db_ok,
+        "db_error": db_error,
     }
 
 

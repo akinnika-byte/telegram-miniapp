@@ -128,6 +128,16 @@
   </div>
 </div>
 
+<!-- Ошибка сервера -->
+<div class="screen" id="scr-error">
+  <div class="center" style="margin-top:36px">
+    <div class="logo">⚠️</div>
+    <h1>Ошибка сервера</h1>
+    <p class="sub" id="err-text">Не удалось подключиться к серверу.</p>
+    <button class="btn primary" id="err-retry">Повторить</button>
+  </div>
+</div>
+
 <!-- Ввод кода машины -->
 <div class="screen" id="scr-pin">
   <div class="center">
@@ -278,19 +288,20 @@ const toast = (msg) => {
 };
 const num = (id) => parseFloat(($(id).value || "0").replace(",", ".")) || 0;
 
-function needInitData() {
-  if (!tg || !tg.initData) { show("scr-outside"); return true; }
-  return false;
-}
-
 /* ---------- Инициализация ---------- */
 async function boot() {
-  if (needInitData()) return;
+  if (!tg || !tg.initData) { show("scr-outside"); return; }
   tg.ready();
+  await loadSession();
+}
+
+async function loadSession() {
   try {
     session = await api("/api/session");
   } catch (e) {
-    show("scr-outside"); return;
+    $("err-text").textContent = e.message;
+    show("scr-error");
+    return;
   }
   if (session.is_admin) { window.location.href = "/admin"; return; }
   openPin();
@@ -431,6 +442,7 @@ function renderResult(d) {
 $("res-back").addEventListener("click", () => show("scr-form"));
 $("change-vehicle").addEventListener("click", openPin);
 $("to-admin").addEventListener("click", openAdminPin);
+$("err-retry").addEventListener("click", loadSession);
 
 /* ---------- Тема ---------- */
 if (tg && tg.onEvent) tg.onEvent("themeChanged", () => location.reload());
