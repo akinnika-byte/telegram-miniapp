@@ -119,12 +119,31 @@
 </style>
 </head>
 <body>
-<div id="fatal" style="display:none;position:fixed;top:0;left:0;right:0;background:#ff5b5b;color:#fff;padding:12px;z-index:999;font-size:13px;text-align:center"></div>
+<div id="fatal" style="display:none;position:fixed;top:0;left:0;right:0;background:#ff5b5b;color:#fff;padding:12px;z-index:999;font-size:12px;text-align:left;white-space:pre-wrap;word-break:break-word"></div>
 <script>
-window.onerror = function (msg, src, line) {
-  var el = document.getElementById("fatal");
-  if (el) { el.style.display = "block"; el.textContent = "Ошибка страницы: " + msg + " (строка " + line + ")"; }
+window.onerror = function (msg, src, line, col, err) {
+  try {
+    var el = document.getElementById("fatal");
+    if (el) {
+      el.style.display = "block";
+      var text = "Ошибка: " + msg + " (строка " + line + ")";
+      if (err && err.stack) text += "\n" + String(err.stack).split("\n").slice(0, 4).join("\n");
+      el.textContent = text;
+    }
+  } catch (e) {}
 };
+window.addEventListener("unhandledrejection", function (ev) {
+  try {
+    var el = document.getElementById("fatal");
+    if (el) {
+      el.style.display = "block";
+      var r = ev.reason;
+      var text = "Ошибка (async): " + (r && r.message ? r.message : String(r));
+      if (r && r.stack) text += "\n" + String(r.stack).split("\n").slice(0, 4).join("\n");
+      el.textContent = text;
+    }
+  } catch (e) {}
+});
 </script>
 <div class="wrap">
 
