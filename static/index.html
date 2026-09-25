@@ -3,6 +3,9 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
+<meta http-equiv="Pragma" content="no-cache" />
+<meta http-equiv="Expires" content="0" />
 <title>АВТР(ПГ)</title>
 <script src="https://telegram.org/js/telegram-web-app.js"></script>
 <style>
@@ -429,7 +432,7 @@ async function submitPin() {
   }, 7000);
   try {
     const data = await api("/api/login", { method: "POST", body: JSON.stringify({ code }) });
-    if (data.kind === "admin") { window.location.href = "/admin#just"; return; }
+    if (data.kind === "admin") { window.location.href = "/admin?v=3#just"; return; }
     vehicle = data.vehicle;
     buzz("success");
     openMenu();
@@ -703,6 +706,15 @@ $("btn-done").addEventListener("click", openMenu);
 $("btn-fix").addEventListener("click", () => { if (lastSaved) openForm(lastSaved, { fix: true }); });
 $("btn-again").addEventListener("click", () => $("m-new").click());
 $("err-retry").addEventListener("click", loadSession);
+/* Страховка: если экран загрузки висит дольше 15 секунд — покажем выход */
+setTimeout(function () {
+  const s = $("scr-loading");
+  if (s && s.classList.contains("active")) {
+    s.innerHTML = '<div class="empty">Не удалось загрузить приложение.<br><br>' +
+      '<button class="btn primary" onclick="location.reload()">Перезагрузить</button></div>';
+  }
+}, 15000);
+
 if (tg && tg.onEvent) tg.onEvent("themeChanged", () => location.reload());
 boot();
 </script>

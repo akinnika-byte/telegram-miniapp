@@ -3,6 +3,9 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
+<meta http-equiv="Pragma" content="no-cache" />
+<meta http-equiv="Expires" content="0" />
 <title>АВТР(ПГ) — управление</title>
 <script src="https://telegram.org/js/telegram-web-app.js"></script>
 <style>
@@ -723,6 +726,15 @@ document.addEventListener("visibilitychange", async () => {
     renderScreen(act.id);
   } catch (e) {}
 });
+
+/* Страховка: если экран загрузки висит дольше 12 секунд — покажем выход */
+setTimeout(function () {
+  const s = $("scr-loading");
+  if (s && s.classList.contains("active")) {
+    s.innerHTML = '<div class="empty">Не удалось загрузить панель.<br><br>' +
+      '<button class="btn primary" onclick="location.href=\'/\'">Вернуться на главную</button></div>';
+  }
+}, 12000);
 
 renderDots();
 boot();
