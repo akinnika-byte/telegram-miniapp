@@ -116,6 +116,13 @@
 </style>
 </head>
 <body>
+<div id="fatal" style="display:none;position:fixed;top:0;left:0;right:0;background:#ff5b5b;color:#fff;padding:12px;z-index:999;font-size:13px;text-align:center"></div>
+<script>
+window.onerror = function (msg, src, line) {
+  var el = document.getElementById("fatal");
+  if (el) { el.style.display = "block"; el.textContent = "Ошибка страницы: " + msg + " (строка " + line + ")"; }
+};
+</script>
 <div class="wrap">
 
   <div class="screen active" id="scr-loading"><div class="spin"></div></div>
@@ -231,11 +238,20 @@ const openCards = new Set();
 
 const $ = (id) => document.getElementById(id);
 const api = async (path, opts = {}) => {
-  const ctrl = new AbortController();
-  const timer = setTimeout(() => ctrl.abort(), 45000);
+  opts = opts || {};
+  let ctrl = null, timer = null;
+  if (typeof AbortController !== "undefined") {
+    ctrl = new AbortController();
+    timer = setTimeout(() => ctrl.abort(), 45000);
+  }
   try {
-    const res = await fetch(path, { ...opts, signal: ctrl.signal, headers: {
-      "Content-Type": "application/json", "X-Telegram-Init-Data": tg ? tg.initData : "", ...(opts.headers || {}) } });
+    const res = await fetch(path, Object.assign({}, opts, {
+      signal: ctrl ? ctrl.signal : undefined,
+      headers: Object.assign({
+        "Content-Type": "application/json",
+        "X-Telegram-Init-Data": tg ? tg.initData : "",
+      }, opts.headers || {}),
+    }));
     const data = await res.json().catch(() => ({}));
     if (!res.ok) throw new Error(data.detail || "Ошибка сервера");
     return data;
@@ -243,13 +259,13 @@ const api = async (path, opts = {}) => {
     if (e && e.name === "AbortError") throw new Error("Сервер долго не отвечает — повторите попытку");
     throw e;
   } finally {
-    clearTimeout(timer);
+    if (timer) clearTimeout(timer);
   }
 };
 const show = (id) => { document.querySelectorAll(".screen").forEach(s => s.classList.remove("active"));
   $(id).classList.add("active"); if (tg) tg.expand(); };
-const esc = (s) => String(s ?? "").replace(/[&<>"]/g, c => ({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;" }[c]));
-const nf = (v, d = 1) => Number(v ?? 0).toFixed(d);
+const esc = (s) => String(s == null ? "" : s).replace(/[&<>"]/g, c => ({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;" }[c]));
+const nf = (v, d = 1) => Number(v == null ? 0 : v).toFixed(d);
 const dstr = (s) => s ? new Date(s).toLocaleDateString("ru-RU") : "—";
 const toast = (m) => { const t = $("toast"); t.textContent = m; t.classList.add("show");
   clearTimeout(t._t); t._t = setTimeout(() => t.classList.remove("show"), 2600); };
@@ -599,7 +615,8 @@ const FORM_GROUPS = [
     ["red_stripe_expires", "Красная полоса до", "date"],
   ]],
 ];
-const FORM_FIELDS = FORM_GROUPS.flatMap(g => g[1]);
+const FORM_FIELDS = [];
+FORM_GROUPS.forEach(function (g) { g[1].forEach(function (f) { FORM_FIELDS.push(f); }); });
 let editing = null;
 
 function openVehicleForm(v) {
