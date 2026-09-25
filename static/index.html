@@ -225,7 +225,7 @@
   <div class="checking">
     <div class="ring"></div>
     <h1>Проверяем код</h1>
-    <p class="sub" style="margin-bottom:0">Пожалуйста, подождите</p>
+    <p class="sub" style="margin-bottom:0" id="checking-hint">Пожалуйста, подождите</p>
     <div class="code" id="checking-code">••••</div>
   </div>
 </div>
@@ -344,12 +344,21 @@ let session = null, vehicle = null, pin = "", editingId = null, fixMode = false,
 
 const $ = (id) => document.getElementById(id);
 const api = async (path, opts = {}) => {
-  const res = await fetch(path, { ...opts, headers: {
-    "Content-Type": "application/json",
-    "X-Telegram-Init-Data": tg ? tg.initData : "", ...(opts.headers || {}) } });
-  const data = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error(data.detail || "Ошибка сервера");
-  return data;
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), 45000);
+  try {
+    const res = await fetch(path, { ...opts, signal: ctrl.signal, headers: {
+      "Content-Type": "application/json",
+      "X-Telegram-Init-Data": tg ? tg.initData : "", ...(opts.headers || {}) } });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.detail || "Ошибка сервера");
+    return data;
+  } catch (e) {
+    if (e && e.name === "AbortError") throw new Error("Сервер долго не отвечает — повторите попытку");
+    throw e;
+  } finally {
+    clearTimeout(timer);
+  }
 };
 const show = (id) => {
   document.querySelectorAll(".screen").forEach(s => s.classList.remove("active"));
@@ -397,7 +406,11 @@ $("keypad").addEventListener("click", (e) => {
 async function submitPin() {
   const code = pin;
   $("checking-code").textContent = code;
+  $("checking-hint").textContent = "Пожалуйста, подождите";
   show("scr-checking");
+  const hint = setTimeout(() => {
+    $("checking-hint").textContent = "Сервер просыпается… Обычно это 30–40 секунд";
+  }, 7000);
   try {
     const data = await api("/api/login", { method: "POST", body: JSON.stringify({ code }) });
     if (data.kind === "admin") { window.location.href = "/admin#just"; return; }
@@ -410,6 +423,8 @@ async function submitPin() {
     show("scr-lock");
     $("pin-error").textContent = e.message;
     pin = ""; renderDots();
+  } finally {
+    clearTimeout(hint);
   }
 }
 $("logout").addEventListener("click", async () => {

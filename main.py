@@ -10,11 +10,12 @@ Backend на FastAPI:
 
 from __future__ import annotations
 
+import time
 from datetime import date, datetime
 from typing import Any, Optional
 
-from fastapi import Depends, FastAPI, Header, HTTPException
-from fastapi.responses import FileResponse
+from fastapi import Depends, FastAPI, Header, HTTPException, Request
+from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from psycopg.types.json import Jsonb
 from pydantic import BaseModel
@@ -36,6 +37,65 @@ app = FastAPI(title="АВТР(ПГ) — проверка путевой доку
 
 if STATIC_DIR.is_dir():
     app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
+
+
+@app.exception_handler(Exception)
+async def unhandled_exception_handler(request: Request, exc: Exception):
+    """Логирует необработанные ошибки в error_log (для диагностики)."""
+    try:
+        with db() as conn:
+            conn.execute(
+                "insert into error_log (method, path, detail) values (%s, %s, %s)",
+                (request.method, request.url.path,
+                 f"{type(exc).__name__}: {str(exc)[:800]}"),
+            )
+    except Exception:
+        pass
+    return JSONResponse(status_code=500, content={"detail": "Внутренняя ошибка сервера"})
+
+
+@app.middleware("http")
+async def log_requests(request: Request, call_next):
+    """Журнал запросов: пишет старт (status=-1) и обновляет по завершении.
+
+    Так видно и зависшие запросы (остаются со status=-1).
+    """
+    start = time.time()
+    log_id = None
+    try:
+        with db() as conn:
+            row = conn.execute(
+                "insert into request_log (method, path, status, duration_ms) "
+                "values (%s, %s, %s, 0) returning id",
+                (request.method, request.url.path[:200], -1),
+            ).fetchone()
+            log_id = row["id"]
+    except Exception:
+        pass
+
+    try:
+        response = await call_next(request)
+    except Exception:
+        try:
+            with db() as conn:
+                conn.execute(
+                    "update request_log set status = -2, duration_ms = %s where id = %s",
+                    (int((time.time() - start) * 1000), log_id),
+                )
+        except Exception:
+            pass
+        raise
+
+    duration_ms = int((time.time() - start) * 1000)
+    try:
+        with db() as conn:
+            conn.execute(
+                "update request_log set status = %s, duration_ms = %s where id = %s",
+                (response.status_code, duration_ms, log_id),
+            )
+    except Exception:
+        pass
+    return response
 
 
 # ============================================================
@@ -748,6 +808,30 @@ def admin_summary(period_id: int, user: dict = Depends(require_admin)) -> dict:
     return {"period": period, "rows": rows, "totals": totals, "sig": sig}
 
 
+@app.get("/api/admin/requests")
+def admin_requests(limit: int = 30, user: dict = Depends(require_admin)) -> list:
+    """Последние запросы к серверу (диагностика, status=-1 — в процессе)."""
+    limit = max(1, min(limit, 200))
+    with db() as conn:
+        return conn.execute(
+            "select id, method, path, status, duration_ms, created_at "
+            "from request_log order by id desc limit %s",
+            (limit,),
+        ).fetchall()
+
+
+@app.get("/api/admin/errors")
+def admin_errors(limit: int = 50, user: dict = Depends(require_admin)) -> list:
+    """Последние ошибки сервера (диагностика)."""
+    limit = max(1, min(limit, 200))
+    with db() as conn:
+        return conn.execute(
+            "select id, method, path, detail, created_at "
+            "from error_log order by id desc limit %s",
+            (limit,),
+        ).fetchall()
+
+
 @app.get("/api/admin/activity")
 def admin_activity(limit: int = 100, user: dict = Depends(require_admin)) -> list:
     limit = max(1, min(limit, 500))
@@ -927,6 +1011,12 @@ def admin_migrate(user: dict = Depends(require_admin)) -> dict:
         "alter table waybills add column if not exists waybill_date date",
         "update waybills set waybill_date = created_at::date "
         "where waybill_date is null",
+        "create table if not exists error_log ("
+        "id bigserial primary key, method text, path text, detail text, "
+        "created_at timestamptz not null default now())",
+        "create table if not exists request_log ("
+        "id bigserial primary key, method text, path text, status int, "
+        "duration_ms int, created_at timestamptz not null default now())",
     ]
     with db() as conn:
         for sql in statements:

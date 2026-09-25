@@ -138,6 +138,27 @@ create table if not exists activity_log (
 );
 create index if not exists idx_activity_created on activity_log(created_at desc);
 
+-- ---------- Журнал ошибок сервера (диагностика) ----------
+create table if not exists error_log (
+    id          bigserial primary key,
+    method      text,
+    path        text,
+    detail      text,
+    created_at  timestamptz not null default now()
+);
+create index if not exists idx_error_created on error_log(created_at desc);
+
+-- ---------- Журнал запросов (диагностика) ----------
+create table if not exists request_log (
+    id           bigserial primary key,
+    method       text,
+    path         text,
+    status       int,
+    duration_ms  int,
+    created_at   timestamptz not null default now()
+);
+create index if not exists idx_request_created on request_log(created_at desc);
+
 -- ---------- Задел на будущее: документы на машину ----------
 create table if not exists vehicle_documents (
     id           bigserial primary key,

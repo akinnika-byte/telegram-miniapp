@@ -231,11 +231,20 @@ const openCards = new Set();
 
 const $ = (id) => document.getElementById(id);
 const api = async (path, opts = {}) => {
-  const res = await fetch(path, { ...opts, headers: {
-    "Content-Type": "application/json", "X-Telegram-Init-Data": tg ? tg.initData : "", ...(opts.headers || {}) } });
-  const data = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error(data.detail || "Ошибка сервера");
-  return data;
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), 45000);
+  try {
+    const res = await fetch(path, { ...opts, signal: ctrl.signal, headers: {
+      "Content-Type": "application/json", "X-Telegram-Init-Data": tg ? tg.initData : "", ...(opts.headers || {}) } });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.detail || "Ошибка сервера");
+    return data;
+  } catch (e) {
+    if (e && e.name === "AbortError") throw new Error("Сервер долго не отвечает — повторите попытку");
+    throw e;
+  } finally {
+    clearTimeout(timer);
+  }
 };
 const show = (id) => { document.querySelectorAll(".screen").forEach(s => s.classList.remove("active"));
   $(id).classList.add("active"); if (tg) tg.expand(); };
