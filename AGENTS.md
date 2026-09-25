@@ -56,7 +56,7 @@ tank_end_calc  = tank_start + fuel_in - P
 ## Инструменты агента (MCP)
 - `sqlproxy.query` — SQL только на чтение к базе (через `POST /api/admin/sql` на Render; надёжнее прямого подключения к Supabase с этой машины).
 - `db-admin` — сабагент для диагностики базы (права: только sqlproxy).
-- `github`, `context7` — удалённые MCP (если подключены).
+- GitHub — через `gh` CLI или REST API с токеном (переменная `GITHUB_PERSONAL_ACCESS_TOKEN`); удалённый GitHub MCP требует тарифа Copilot и у этого аккаунта отдаёт 403.
 
 ## Процедура деплоя
 1. `git push origin main` → Render передеплоивает сам (~1–2 мин).
