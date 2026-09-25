@@ -131,6 +131,29 @@
   .status.ok { background: var(--ok-bg); color: var(--ok); }
   .status.bad { background: var(--bad-bg); color: var(--bad); }
 
+  /* ---- Сверка ---- */
+  .cmp-head, .cmp-row { display: grid; grid-template-columns: 1.4fr 1fr 1fr; gap: 8px; align-items: center; }
+  .cmp-head { font-size: 11px; color: var(--hint); font-weight: 700; text-transform: uppercase;
+              letter-spacing: .3px; padding-bottom: 8px; border-bottom: 1px solid var(--border); }
+  .cmp-head span:not(:first-child), .cmp-row .a, .cmp-row .b { text-align: right; }
+  .cmp-row { padding: 11px 0; border-bottom: 1px solid var(--border); font-size: 14px;
+             font-variant-numeric: tabular-nums; }
+  .cmp-row:last-child { border-bottom: none; }
+  .cmp-row .k { color: var(--hint); }
+  .cmp-row .a { font-weight: 800; }
+  .cmp-row .b { color: var(--hint); }
+  .cmp-row.good .a { color: var(--ok); }
+  .cmp-row.bad .a { color: var(--bad); }
+  .cmp-row.bad .b { color: var(--ok); font-weight: 700; }
+
+  .mismatch { border: 1.5px solid var(--bad); border-radius: 16px; padding: 16px;
+              margin-bottom: 14px; font-size: 14px; line-height: 1.55; }
+  .mismatch .title { color: var(--bad); font-weight: 800; margin-bottom: 8px; }
+  .mismatch ul { margin: 6px 0 10px; padding-left: 20px; }
+  .mismatch li { margin-bottom: 3px; }
+  .mismatch .calc { margin-top: 6px; color: var(--text); line-height: 1.7; }
+  .mismatch .calc b { color: var(--accent); font-size: 16px; }
+
   .topbar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px; }
   .link { color: var(--accent); font-size: 14px; background: none; border: none; cursor: pointer; padding: 6px;
           border-radius: 9px; }
@@ -144,6 +167,9 @@
   .hist .kv { display: grid; grid-template-columns: 1fr 1fr; gap: 4px 12px; margin-top: 8px;
               font-size: 13px; color: var(--hint); }
   .hist .kv b { color: var(--text); }
+  .hist .h { cursor: pointer; }
+  .hist .wb-detail { display: none; margin-top: 10px; border-top: 1px solid var(--border); padding-top: 4px; }
+  .hist.open .wb-detail { display: block; animation: fade .2s ease; }
   .empty { text-align: center; color: var(--hint); padding: 34px 10px; }
   .toast { position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%) translateY(140%);
            background: #111; color: #fff; padding: 13px 20px; border-radius: 14px; font-size: 14px;
@@ -282,32 +308,30 @@
   </p>
 </div>
 
-<!-- Результат (уже отправлено) -->
+<!-- Результат проверки -->
 <div class="screen" id="scr-result">
   <div class="status" id="res-status">
     <div class="big" id="res-status-big">—</div>
     <div class="small" id="res-status-small">—</div>
   </div>
+
   <div class="card">
-    <h3>⛽ Расчёт топлива</h3>
+    <h3>Сверка данных</h3>
+    <div class="cmp-head"><span>Показатель</span><span>Ваши данные</span><span>По расчёту</span></div>
+    <div id="cmp-body"></div>
+  </div>
+
+  <div class="card">
+    <h3>Правильный расчёт топлива</h3>
     <div class="row"><span class="l">P1 (без груза, −15%)</span><span class="v" id="r-p1">—</span></div>
     <div class="row"><span class="l">P2 (с грузом)</span><span class="v" id="r-p2">—</span></div>
-    <div class="row"><span class="l">H (моточасы)</span><span class="v" id="r-h">—</span></div>
+    <div class="row" id="row-h"><span class="l">H (моточасы)</span><span class="v" id="r-h">—</span></div>
     <div class="row"><span class="l">P (итого топливо)</span><span class="v" id="r-p">—</span></div>
   </div>
-  <div class="card">
-    <h3>📍 Километраж</h3>
-    <div class="row"><span class="l">Общий пробег (одометр)</span><span class="v" id="r-odo">—</span></div>
-    <div class="row"><span class="l">Пробег (с+без груза)</span><span class="v" id="r-input">—</span></div>
-    <div class="row"><span class="l">Расхождение</span><span class="v" id="r-kmdiff">—</span></div>
-  </div>
-  <div class="card">
-    <h3>🛢 Баки</h3>
-    <div class="row"><span class="l">Бак на конец (расчёт)</span><span class="v" id="r-tankcalc">—</span></div>
-    <div class="row"><span class="l">Бак на конец (введено)</span><span class="v" id="r-tankend">—</span></div>
-    <div class="row"><span class="l">Затрачено (введено)</span><span class="v" id="r-spent">—</span></div>
-    <div class="row"><span class="l">Затрачено (расчёт)</span><span class="v" id="r-spentcalc">—</span></div>
-  </div>
+
+  <div id="res-mismatch"></div>
+
+  <button class="btn primary" id="btn-fix">✏️ Исправить</button>
   <button class="btn primary" id="btn-done">Готово</button>
   <button class="btn ghost" id="btn-again">Новый путевой</button>
 </div>
@@ -316,7 +340,7 @@
 
 <script>
 const tg = window.Telegram && window.Telegram.WebApp ? window.Telegram.WebApp : null;
-let session = null, vehicle = null, pin = "", editingId = null;
+let session = null, vehicle = null, pin = "", editingId = null, fixMode = false, lastSaved = null;
 
 const $ = (id) => document.getElementById(id);
 const api = async (path, opts = {}) => {
@@ -409,10 +433,12 @@ function openMenu() {
 }
 $("m-new").addEventListener("click", () => openForm(null));
 
-function openForm(rec) {
+function openForm(rec, opts = {}) {
   editingId = rec ? rec.id : null;
+  fixMode = !!opts.fix;
   $("form-title").textContent = rec ? `Исправление путевого №${rec.waybill_no}` : "Новый путевой";
-  $("btn-check").textContent = rec ? "Проверить и сохранить" : "Проверить и отправить";
+  $("btn-check").textContent = fixMode ? "Я исправил"
+    : (rec ? "Проверить и сохранить" : "Проверить и отправить");
   $("v-plate").textContent = vehicle.plate;
   $("v-model").textContent = vehicle.model || "—";
   $("v-norm").textContent = vehicle.fuel_norm;
@@ -498,7 +524,9 @@ async function loadVehicle() {
 async function loadProfile() {
   show("scr-profile"); $("prof-body").innerHTML = '<div class="spinner"></div>';
   try {
-    const p = await api("/api/driver/profile");
+    const [p, rows] = await Promise.all([
+      api("/api/driver/profile"), api("/api/driver/waybills"),
+    ]);
     $("prof-body").innerHTML = `
       <div class="card">
         ${vehRow("ФИО", p.full_name)}
@@ -507,7 +535,26 @@ async function loadProfile() {
         ${vehRow("Права", p.license_number)}
         ${vehRow("Закреплённая техника", p.plate + (p.model ? " · " + p.model : ""))}
         ${vehRow("Закрыто документации", String(p.closed_docs))}
-      </div>`;
+      </div>
+      <h2 style="margin-top:8px">Мои путевые (${rows.length})</h2>
+      <div id="prof-wb">${rows.length ? "" : '<div class="empty">Путёвок пока нет</div>'}</div>`;
+    $("prof-wb").innerHTML = rows.map(r => `
+      <div class="hist">
+        <div class="h" data-toggle>
+          <b>Путевой №${esc(r.waybill_no)}</b>
+          <span>${r.is_corrected ? '<span class="badge corr">ИСПРАВЛЕН</span> ' : ""}<span class="badge ${r.is_ok ? "ok" : "bad"}">${r.is_ok ? "OK" : "РАСХОЖДЕНИЕ"}</span></span>
+        </div>
+        <div class="muted" style="font-size:12px;margin-top:4px">${esc(r.period_name)} · ${dstr(r.waybill_date || r.created_at)}</div>
+        <div class="wb-detail">
+          ${vehRow("Пробег", nf(r.km_total_odo) + " км")}
+          ${vehRow("Топливо (расчёт)", nf(r.fuel_calc) + " л")}
+          ${vehRow("Бак нач/кон", nf(r.tank_start) + " / " + nf(r.tank_end) + " л")}
+          ${vehRow("Затрачено топлива", nf(r.fuel_spent) + " л")}
+          ${vehRow("Моточасы", nf(r.motohours))}
+        </div>
+      </div>`).join("");
+    $("prof-wb").querySelectorAll("[data-toggle]").forEach(h =>
+      h.addEventListener("click", () => h.closest(".hist").classList.toggle("open")));
   } catch (e) { $("prof-body").innerHTML = `<div class="empty">${esc(e.message)}</div>`; }
 }
 
@@ -524,6 +571,7 @@ $("btn-check").addEventListener("click", async () => {
   try {
     const data = await api("/api/waybill/save", { method: "POST", body: JSON.stringify(payload) });
     buzz("success");
+    lastSaved = Object.assign({}, payload, { id: data.id });
     renderResult(data.result, payload.waybill_no, data.is_corrected);
     show("scr-result");
   } catch (e) {
@@ -531,7 +579,8 @@ $("btn-check").addEventListener("click", async () => {
     toast(e.message);
   } finally {
     btn.disabled = false;
-    btn.textContent = editingId ? "Проверить и сохранить" : "Проверить и отправить";
+    btn.textContent = fixMode ? "Я исправил"
+      : (editingId ? "Проверить и сохранить" : "Проверить и отправить");
   }
 });
 function setVal(id, text, cls) {
@@ -539,26 +588,61 @@ function setVal(id, text, cls) {
   if (cls) el.classList.add(cls);
 }
 function renderResult(d, waybillNo, corrected) {
-  setVal("r-p1", d.p1 + " л"); setVal("r-p2", d.p2 + " л");
-  setVal("r-h", d.h + " л"); setVal("r-p", d.fuel_calc + " л");
-  setVal("r-odo", nf(d.km_total_odo) + " км", d.km_ok ? "ok" : "bad");
-  setVal("r-input", nf(d.km_total_input) + " км", d.km_ok ? "ok" : "bad");
-  setVal("r-kmdiff", d.km_ok ? "0 км" : (d.km_total_odo - d.km_total_input).toFixed(2) + " км", d.km_ok ? "ok" : "bad");
-  setVal("r-tankcalc", nf(d.tank_end_calc) + " л", d.tank_ok ? "ok" : "bad");
-  setVal("r-tankend", nf(d.tank_end) + " л", d.tank_ok ? "ok" : "bad");
-  setVal("r-spent", nf(d.fuel_spent) + " л", d.fuel_ok ? "ok" : "bad");
-  setVal("r-spentcalc", d.fuel_calc + " л", d.fuel_ok ? "ok" : "bad");
-
   const st = $("res-status");
   st.className = "status " + (d.is_ok ? "ok" : "bad");
   const action = corrected ? "Исправлено" : "Отправлено";
-  $("res-status-big").textContent = d.is_ok ? `✔ ${action}` : "⚠ Расхождения";
+  $("res-status-big").textContent = d.is_ok ? `✔ ${action}` : "⚠ Найдены расхождения";
   $("res-status-small").textContent = corrected
     ? `Путевой №${waybillNo} исправлен и сохранён`
     : (d.is_ok ? `Путевой №${waybillNo} сохранён на сервере`
-               : `Путевой №${waybillNo} сохранён, но проверьте данные`);
+               : `Путевой №${waybillNo} сохранён. Исправьте данные`);
+
+  const rows = [
+    ["Пробег (одометр)", d.km_total_odo, d.km_total_input, "км", d.km_ok],
+    ["Топливо затрачено", d.fuel_spent, d.fuel_calc, "л", d.fuel_ok],
+    ["Остаток в баке", d.tank_end, d.tank_end_calc, "л", d.tank_ok],
+  ];
+  $("cmp-body").innerHTML = rows.map(([k, mine, calc, unit, ok]) => `
+    <div class="cmp-row ${ok ? "good" : "bad"}">
+      <span class="k">${k}</span>
+      <span class="a">${nf(mine)} ${unit}</span>
+      <span class="b">${nf(calc)} ${unit}</span>
+    </div>`).join("");
+
+  $("r-p1").textContent = d.p1 + " л";
+  $("r-p2").textContent = d.p2 + " л";
+  $("r-h").textContent = d.h + " л";
+  $("r-p").textContent = d.fuel_calc + " л";
+  $("row-h").style.display = d.h ? "" : "none";
+
+  const errors = [];
+  if (!d.km_ok) errors.push(`километраж — расхождение на <b>${Math.abs(d.km_total_odo - d.km_total_input).toFixed(2)} км</b>`);
+  if (!d.fuel_ok) errors.push(`топливо — расхождение на <b>${Math.abs(d.fuel_spent - d.fuel_calc).toFixed(1)} л</b>`);
+  if (!d.tank_ok) errors.push(`остаток в баке — расхождение на <b>${Math.abs(d.tank_end - d.tank_end_calc).toFixed(1)} л</b>`);
+
+  if (errors.length) {
+    $("res-mismatch").innerHTML = `
+      <div class="mismatch">
+        <div class="title">Найдено несоответствие</div>
+        <ul>${errors.map(e => `<li>${e}</li>`).join("")}</ul>
+        <div>Проверьте ваш расчёт — у вас должно быть:</div>
+        <div class="calc">
+          P1 = <b>${d.p1}</b> л<br>
+          P2 = <b>${d.p2}</b> л<br>
+          ${d.h ? `H = <b>${d.h}</b> л<br>` : ""}
+          P = <b>${d.fuel_calc}</b> л
+        </div>
+      </div>`;
+    $("btn-fix").style.display = "";
+    $("btn-again").style.display = "none";
+  } else {
+    $("res-mismatch").innerHTML = "";
+    $("btn-fix").style.display = "none";
+    $("btn-again").style.display = "";
+  }
 }
 $("btn-done").addEventListener("click", openMenu);
+$("btn-fix").addEventListener("click", () => { if (lastSaved) openForm(lastSaved, { fix: true }); });
 $("btn-again").addEventListener("click", () => $("m-new").click());
 $("err-retry").addEventListener("click", loadSession);
 if (tg && tg.onEvent) tg.onEvent("themeChanged", () => location.reload());

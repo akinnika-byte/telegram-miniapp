@@ -301,6 +301,7 @@ async function loadReport(box) {
       e.stopPropagation();
       openWaybillForm(reportItems[b.dataset.wb]);
     }));
+    if (data.sig) lastSig = data.sig;
   } catch (e) { box.innerHTML = `<div class="empty">${esc(e.message)}</div>`; }
 }
 
@@ -349,6 +350,7 @@ async function loadSummary(box) {
           </div>
         </div>`).join("");
     bindToggles(box);
+    if (data.sig) lastSig = data.sig;
   } catch (e) { box.innerHTML = `<div class="empty">${esc(e.message)}</div>`; }
 }
 function bindToggles(box) {
@@ -430,11 +432,13 @@ async function loadDrivers(box) {
 }
 
 function openDriverCard(plate) {
-  const d = (vehiclesCache || []).find(v => String(v.plate) === plate);
   show("scr-driver");
   $("drv-body").innerHTML = '<div class="spin"></div>';
-  api("/api/admin/drivers").then(rows => {
-    const r = rows.find(x => String(x.plate) === plate);
+  Promise.all([
+    api("/api/admin/drivers"),
+    api("/api/admin/vehicle-waybills?plate=" + encodeURIComponent(plate)),
+  ]).then(([rows, wbs]) => {
+    const r = rows.find(x => String(x.plate) === plate) || {};
     $("drv-body").innerHTML = `
       <div class="card" style="padding:16px">
         <div class="kv" style="grid-template-columns:1fr">
@@ -442,11 +446,36 @@ function openDriverCard(plate) {
           <div>Звание: <b>${esc(r.driver_rank || "—")}</b></div>
           <div>Должность: <b>${esc(r.driver_position || "—")}</b></div>
           <div>Права: <b>${esc(r.driver_license || "—")}</b></div>
-          <div>Закреплённая техника: <b>${esc(r.plate)} · ${esc(r.model || "")}</b></div>
-          <div>Закрыто документации: <b>${r.waybill_count}</b></div>
+          <div>Закреплённая техника: <b>${esc(r.plate || plate)} · ${esc(r.model || "")}</b></div>
+          <div>Закрыто документации: <b>${r.waybill_count || 0}</b></div>
         </div>
       </div>
-      <button class="btn primary" id="drv-edit">Изменить данные</button>`;
+      <button class="btn primary" id="drv-edit" style="margin-bottom:16px">Изменить данные</button>
+      <h2>Путевые (${wbs.length})</h2>
+      <div id="drv-wbs">${wbs.length ? "" : '<div class="empty">Путёвок нет</div>'}</div>`;
+    $("drv-wbs").innerHTML = wbs.map(w => `
+      <div class="card" style="padding:0">
+        <div class="row" data-wbtoggle>
+          <div><div class="plate">№${esc(w.waybill_no)}</div>
+            <div class="meta">${esc(w.period_name)} · ${dstr(w.waybill_date || w.created_at)}</div></div>
+          <div class="right">
+            <span class="badge ${w.is_corrected ? "warn" : (w.is_ok ? "ok" : "bad")}">${w.is_corrected ? "ИСПРАВЛЕН" : (w.is_ok ? "OK" : "РАСХОЖДЕНИЕ")}</span>
+            <div style="margin-top:6px">${nf(w.km_total_odo)} км · ${nf(w.fuel_spent)} л</div></div>
+        </div>
+        <div class="detail">
+          <div class="item"><div class="kv">
+            <span>Пробег: <b>${nf(w.km_total_odo)} км</b></span>
+            <span>Топливо (расчёт): <b>${nf(w.fuel_calc)} л</b></span>
+            <span>Бак нач/кон: <b>${nf(w.tank_start)} / ${nf(w.tank_end)} л</b></span>
+            <span>Затрачено: <b>${nf(w.fuel_spent)} л</b></span>
+            <span>Моточасы: <b>${nf(w.motohours)}</b></span>
+            <span>Получено: <b>${nf(w.fuel_in)} л</b></span>
+          </div></div>
+        </div>
+      </div>`).join("");
+    $("drv-wbs").querySelectorAll("[data-wbtoggle]").forEach(rr =>
+      rr.addEventListener("click", () =>
+        rr.parentElement.querySelector(".detail").classList.toggle("open")));
     $("drv-edit").addEventListener("click", () => {
       const v = (vehiclesCache || []).find(x => String(x.plate) === plate);
       openVehicleForm(v);
@@ -557,17 +586,28 @@ $("wb-save").addEventListener("click", async () => {
   finally { b.disabled = false; b.textContent = "Проверить и сохранить"; }
 });
 
-/* ---------- Живое обновление ---------- */
-setInterval(() => {
+/* ---------- Живое обновление (только при изменениях) ---------- */
+let lastSig = null;
+
+async function pollChanges() {
   if (document.visibilityState !== "visible") return;
   const panel = $("scr-panel");
   if (!panel || !panel.classList.contains("active")) return;
-  if (["report", "summary", "activity"].includes(activeTab)) render();
-}, 20000);
+  if (!["report", "summary"].includes(activeTab) || !currentPeriod) return;
+  try {
+    const { sig } = await api(`/api/admin/version?period_id=${currentPeriod}`);
+    if (lastSig !== null && sig !== lastSig) render();   // что-то добавили/исправили
+    lastSig = sig;
+  } catch (e) { /* тихо игнорируем сетевые сбои */ }
+}
+setInterval(pollChanges, 8000);
 
 document.addEventListener("visibilitychange", () => {
   const panel = $("scr-panel");
-  if (document.visibilityState === "visible" && panel && panel.classList.contains("active")) render();
+  if (document.visibilityState === "visible" && panel && panel.classList.contains("active")) {
+    lastSig = null;
+    pollChanges();
+  }
 });
 
 renderDots();
