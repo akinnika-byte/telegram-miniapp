@@ -53,6 +53,11 @@ tank_end_calc  = tank_start + fuel_in - P
 - RLS включён на всех таблицах; бэкенд подключается как `postgres`.
 - `initData` устаревает через `INIT_DATA_MAX_AGE` (по умолчанию 86400 с).
 
+## Инструменты агента (MCP)
+- `sqlproxy.query` — SQL только на чтение к базе (через `POST /api/admin/sql` на Render; надёжнее прямого подключения к Supabase с этой машины).
+- `db-admin` — сабагент для диагностики базы (права: только sqlproxy).
+- `github`, `context7` — удалённые MCP (если подключены).
+
 ## Процедура деплоя
 1. `git push origin main` → Render передеплоивает сам (~1–2 мин).
 2. Проверка: `GET https://telegram-miniapp-emy5.onrender.com/api/health` → `db_ok: true`.
