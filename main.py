@@ -11,7 +11,8 @@ Backend на FastAPI:
 from __future__ import annotations
 
 import time
-from datetime import date, datetime
+from collections import deque
+from datetime import date, datetime, timezone
 from typing import Any, Optional
 
 from fastapi import Depends, FastAPI, Header, HTTPException, Request
@@ -54,47 +55,40 @@ async def unhandled_exception_handler(request: Request, exc: Exception):
     return JSONResponse(status_code=500, content={"detail": "Внутренняя ошибка сервера"})
 
 
+REQUEST_LOG = deque(maxlen=400)
+_req_counter = 0
+
+
+def request_log_counter() -> int:
+    global _req_counter
+    _req_counter += 1
+    return _req_counter
+
+
 @app.middleware("http")
 async def log_requests(request: Request, call_next):
-    """Журнал запросов: пишет старт (status=-1) и обновляет по завершении.
+    """Лёгкий журнал запросов в памяти (без обращений к БД).
 
-    Так видно и зависшие запросы (остаются со status=-1).
+    status=-1 — запрос в процессе, -2 — упал.
     """
     start = time.time()
-    log_id = None
-    try:
-        with db() as conn:
-            row = conn.execute(
-                "insert into request_log (method, path, status, duration_ms) "
-                "values (%s, %s, %s, 0) returning id",
-                (request.method, request.url.path[:200], -1),
-            ).fetchone()
-            log_id = row["id"]
-    except Exception:
-        pass
-
+    entry = {
+        "id": request_log_counter(),
+        "method": request.method,
+        "path": request.url.path[:200],
+        "status": -1,
+        "duration_ms": 0,
+        "created_at": datetime.now(timezone.utc),
+    }
+    REQUEST_LOG.appendleft(entry)
     try:
         response = await call_next(request)
     except Exception:
-        try:
-            with db() as conn:
-                conn.execute(
-                    "update request_log set status = -2, duration_ms = %s where id = %s",
-                    (int((time.time() - start) * 1000), log_id),
-                )
-        except Exception:
-            pass
+        entry["status"] = -2
+        entry["duration_ms"] = int((time.time() - start) * 1000)
         raise
-
-    duration_ms = int((time.time() - start) * 1000)
-    try:
-        with db() as conn:
-            conn.execute(
-                "update request_log set status = %s, duration_ms = %s where id = %s",
-                (response.status_code, duration_ms, log_id),
-            )
-    except Exception:
-        pass
+    entry["status"] = response.status_code
+    entry["duration_ms"] = int((time.time() - start) * 1000)
     return response
 
 
@@ -810,14 +804,9 @@ def admin_summary(period_id: int, user: dict = Depends(require_admin)) -> dict:
 
 @app.get("/api/admin/requests")
 def admin_requests(limit: int = 30, user: dict = Depends(require_admin)) -> list:
-    """Последние запросы к серверу (диагностика, status=-1 — в процессе)."""
+    """Последние запросы к серверу (в памяти, status=-1 — в процессе)."""
     limit = max(1, min(limit, 200))
-    with db() as conn:
-        return conn.execute(
-            "select id, method, path, status, duration_ms, created_at "
-            "from request_log order by id desc limit %s",
-            (limit,),
-        ).fetchall()
+    return list(REQUEST_LOG)[:limit]
 
 
 @app.get("/api/admin/errors")
