@@ -2,13 +2,6 @@
   "$schema": "https://opencode.ai/config.json",
   "mcp": {
     "servers": {
-      "postgres": {
-        "type": "local",
-        "command": ["npx", "-y", "@modelcontextprotocol/server-postgres"],
-        "environment": {
-          "DATABASE_URL": "{env:DATABASE_URL}"
-        }
-      },
       "github": {
         "type": "remote",
         "url": "https://api.githubcopilot.com/mcp/",
