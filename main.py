@@ -136,6 +136,11 @@ class VehicleIn(BaseModel):
     red_stripe_expires: Optional[str] = None
 
 
+class SqlIn(BaseModel):
+    """Запрос на чтение к базе (только для админов и MCP-прокси)."""
+    sql: str
+
+
 # ============================================================
 #   Служебные функции
 # ============================================================
@@ -807,6 +812,28 @@ def admin_requests(limit: int = 30, user: dict = Depends(require_admin)) -> list
     """Последние запросы к серверу (в памяти, status=-1 — в процессе)."""
     limit = max(1, min(limit, 200))
     return list(REQUEST_LOG)[:limit]
+
+
+@app.post("/api/admin/sql")
+def admin_sql(payload: SqlIn, user: dict = Depends(require_admin)) -> dict:
+    """Выполняет один запрос только на чтение (для MCP-прокси и админов)."""
+    sql = (payload.sql or "").strip().rstrip(";").strip()
+    if not sql:
+        raise HTTPException(status_code=400, detail="Пустой запрос")
+    if ";" in sql:
+        raise HTTPException(status_code=400, detail="Разрешён только один запрос")
+    first = sql.lstrip().split(None, 1)[0].upper()
+    if first in ("SELECT", "WITH", "TABLE", "VALUES"):
+        if "limit" not in sql.lower():
+            sql = f"{sql} LIMIT 200"
+    elif first not in ("SHOW", "EXPLAIN"):
+        raise HTTPException(
+            status_code=400,
+            detail="Разрешены только запросы на чтение (SELECT/SHOW/EXPLAIN)",
+        )
+    with db() as conn:
+        rows = conn.execute(sql).fetchall()
+    return {"rows": rows}
 
 
 @app.get("/api/admin/errors")
