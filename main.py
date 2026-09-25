@@ -145,6 +145,7 @@ class SqlIn(BaseModel):
 #   Служебные функции
 # ============================================================
 def actor_name(user: dict) -> str:
+    """Имя из Telegram — только как запасной вариант."""
     parts = [user.get("first_name") or "", user.get("last_name") or ""]
     name = " ".join(p for p in parts if p).strip()
     if user.get("username"):
@@ -152,8 +153,27 @@ def actor_name(user: dict) -> str:
     return name or f"id{user.get('telegram_id')}"
 
 
+def actor_display(conn, user: dict, plate: str | None = None) -> str:
+    """Имя для журнала и отчётов — из базы водителей, а не из Telegram.
+
+    Водитель → ФИО его машины; админы → название роли.
+    """
+    role = user.get("role")
+    if role in ADMIN_ROLES:
+        return ADMIN_ROLE_TITLES.get(role, "Администратор")
+    plate = (plate or user.get("vehicle_plate") or "").strip()
+    if plate:
+        row = conn.execute(
+            "select driver_name from vehicles where plate = %s", (plate,)
+        ).fetchone()
+        name = (row or {}).get("driver_name")
+        return name or f"Водитель {plate}"
+    return "Водитель"
+
+
 def log_action(conn, user: dict, action: str, entity: str | None = None,
-               entity_id: Any = None, details: dict | None = None) -> None:
+               entity_id: Any = None, details: dict | None = None,
+               plate: str | None = None) -> None:
     conn.execute(
         """
         insert into activity_log
@@ -162,7 +182,7 @@ def log_action(conn, user: dict, action: str, entity: str | None = None,
         """,
         (
             user.get("telegram_id"),
-            actor_name(user),
+            actor_display(conn, user, plate),
             user.get("role"),
             action,
             entity,
@@ -300,9 +320,11 @@ def health() -> dict:
 @app.post("/api/session")
 def session(user: dict = Depends(current_user)) -> dict:
     """Кто я: роль и последняя машина (если водитель)."""
+    with db() as conn:
+        display = actor_display(conn, user, user.get("vehicle_plate"))
     return {
         "telegram_id": user["telegram_id"],
-        "name": actor_name(user),
+        "name": display,
         "role": user["role"],
         "vehicle_plate": user.get("vehicle_plate"),
         "is_admin": user["role"] in ADMIN_ROLES,
@@ -331,7 +353,7 @@ def login(payload: CodeIn, user: dict = Depends(current_user)) -> dict:
                 (vehicle["plate"], user["telegram_id"]),
             )
             log_action(conn, user, "driver_login", "vehicle", vehicle["id"],
-                       {"plate": vehicle["plate"]})
+                       {"plate": vehicle["plate"]}, plate=vehicle["plate"])
             return {"kind": "driver", "vehicle": vehicle}
 
         admin = conn.execute(
@@ -376,7 +398,7 @@ def driver_login(payload: CodeIn, user: dict = Depends(current_user)) -> dict:
         )
         period = period_for_date(conn, date.today())
         log_action(conn, user, "driver_login", "vehicle", vehicle["id"],
-                   {"plate": vehicle["plate"]})
+                   {"plate": vehicle["plate"]}, plate=vehicle["plate"])
 
     return {"vehicle": vehicle, "period": period}
 
@@ -434,7 +456,7 @@ def driver_waybills(user: dict = Depends(current_user)) -> list:
             from waybills w
             join periods p on p.id = w.period_id
             where w.plate = %s
-            order by w.created_at desc
+            order by w.waybill_date desc nulls last, w.created_at desc
             limit 200
             """,
             (plate,),
@@ -532,6 +554,7 @@ def waybill_save(payload: WaybillIn, user: dict = Depends(current_user)) -> dict
             "waybill_no": wb_no,
             "wb_date": d,
             "tg_id": user["telegram_id"],
+            "who": actor_display(conn, user, vehicle["plate"]),
         }
 
         if payload.id:
@@ -555,7 +578,8 @@ def waybill_save(payload: WaybillIn, user: dict = Depends(current_user)) -> dict
                     tank_end_calc=%(tank_end_calc)s,
                     km_ok=%(km_ok)s, tank_ok=%(tank_ok)s, fuel_ok=%(fuel_ok)s,
                     is_ok=%(is_ok)s,
-                    is_corrected=true, corrected_at=now(), updated_at=now()
+                    is_corrected=true, corrected_at=now(),
+                    corrected_by_name=%(who)s, updated_at=now()
                 where id = %(id)s
                 returning id, created_at, is_corrected
                 """,
@@ -573,7 +597,7 @@ def waybill_save(payload: WaybillIn, user: dict = Depends(current_user)) -> dict
                     p1, p2, h, fuel_calc,
                     km_total_odo, km_total_input, tank_end_calc,
                     km_ok, tank_ok, fuel_ok, is_ok,
-                    created_by_telegram_id
+                    created_by_telegram_id, created_by_name
                 ) values (
                     %(period_id)s, %(vehicle_id)s, %(plate)s, %(model)s,
                     %(waybill_no)s, %(wb_date)s,
@@ -584,7 +608,7 @@ def waybill_save(payload: WaybillIn, user: dict = Depends(current_user)) -> dict
                     %(p1)s, %(p2)s, %(h)s, %(fuel_calc)s,
                     %(km_total_odo)s, %(km_total_input)s, %(tank_end_calc)s,
                     %(km_ok)s, %(tank_ok)s, %(fuel_ok)s, %(is_ok)s,
-                    %(tg_id)s
+                    %(tg_id)s, %(who)s
                 )
                 returning id, created_at, is_corrected
                 """,
@@ -594,7 +618,8 @@ def waybill_save(payload: WaybillIn, user: dict = Depends(current_user)) -> dict
 
         log_action(conn, user, action, "waybill", row["id"],
                    {"plate": vehicle["plate"], "waybill_no": wb_no,
-                    "period": period["name"], "is_ok": r["is_ok"]})
+                    "period": period["name"], "is_ok": r["is_ok"]},
+                   plate=vehicle["plate"])
 
     corrected = bool(row.get("is_corrected")) or bool(payload.id)
     if payload.id:
@@ -611,6 +636,46 @@ def waybill_save(payload: WaybillIn, user: dict = Depends(current_user)) -> dict
         "is_corrected": corrected,
         "message": message,
     }
+
+
+@app.delete("/api/waybill/{waybill_id}")
+def waybill_delete(waybill_id: int, user: dict = Depends(require_admin)) -> dict:
+    """Удаление путевого листа (только администраторы)."""
+    with db() as conn:
+        row = conn.execute(
+            "select id, plate, waybill_no from waybills where id = %s",
+            (waybill_id,),
+        ).fetchone()
+        if not row:
+            raise HTTPException(status_code=404, detail="Путевой не найден")
+        conn.execute("delete from waybills where id = %s", (waybill_id,))
+        log_action(conn, user, "delete_waybill", "waybill", waybill_id,
+                   {"plate": row["plate"], "waybill_no": row["waybill_no"]},
+                   plate=row["plate"])
+    return {"ok": True, "id": waybill_id}
+
+
+@app.get("/api/last-state")
+def last_state(plate: str, user: dict = Depends(current_user)) -> dict:
+    """Последнее состояние машины — для автозаполнения следующего путевого.
+
+    Берётся хронологически последний путевой (с учётом исправлений):
+    конечный километраж и остаток в баке.
+    """
+    if user.get("role") not in ADMIN_ROLES:
+        plate = user.get("vehicle_plate") or plate
+    with db() as conn:
+        row = conn.execute(
+            """
+            select waybill_no, km_end, tank_end, waybill_date, is_ok, is_corrected
+            from waybills
+            where plate = %s
+            order by waybill_date desc nulls last, created_at desc
+            limit 1
+            """,
+            (plate,),
+        ).fetchone()
+    return {"last": row}
 
 
 # ============================================================
@@ -706,9 +771,8 @@ def admin_report(period_id: int, user: dict = Depends(require_admin)) -> dict:
         g["count"] += 1
         if not r["is_ok"]:
             g["has_bad"] = True
-        author = " ".join(filter(None, [r["first_name"], r["last_name"]])) or ""
-        if r["username"]:
-            author = f"{author} (@{r['username']})".strip()
+        author = (r.get("corrected_by_name") if r.get("is_corrected") else None) \
+            or r.get("created_by_name") or ""
         g["items"].append({
             "id": r["id"],
             "waybill_no": r["waybill_no"],
@@ -989,7 +1053,7 @@ def admin_vehicle_waybills(plate: str, user: dict = Depends(require_admin)) -> l
             from waybills w
             join periods p on p.id = w.period_id
             where w.plate = %s
-            order by w.created_at desc
+            order by w.waybill_date desc nulls last, w.created_at desc
             limit 200
             """,
             (plate,),
@@ -1025,6 +1089,10 @@ def admin_migrate(user: dict = Depends(require_admin)) -> dict:
         "boolean not null default false",
         "alter table waybills add column if not exists corrected_at timestamptz",
         "alter table waybills add column if not exists waybill_date date",
+        "alter table waybills add column if not exists created_by_name text",
+        "alter table waybills add column if not exists corrected_by_name text",
+        "create index if not exists idx_waybills_vehicle_date "
+        "on waybills(vehicle_id, waybill_date desc nulls last, created_at desc)",
         "update waybills set waybill_date = created_at::date "
         "where waybill_date is null",
         "create table if not exists error_log ("

@@ -113,6 +113,8 @@ create table if not exists waybills (
     waybill_date   date,                                    -- дата путевого (для отчёта)
 
     created_by_telegram_id bigint,
+    created_by_name    text,                                -- кто внёс (ФИО водителя или роль админа)
+    corrected_by_name  text,                                -- кто исправил
     created_at    timestamptz not null default now(),
     updated_at    timestamptz not null default now(),
 
@@ -123,6 +125,9 @@ create index if not exists idx_waybills_period  on waybills(period_id);
 create index if not exists idx_waybills_vehicle on waybills(vehicle_id);
 create index if not exists idx_waybills_plate   on waybills(plate);
 create index if not exists idx_waybills_created on waybills(created_at desc);
+-- последнее состояние машины: выборка «последний путевой по дате»
+create index if not exists idx_waybills_vehicle_date
+    on waybills(vehicle_id, waybill_date desc nulls last, created_at desc);
 
 -- ---------- Журнал активности (кто что сделал) ----------
 create table if not exists activity_log (
@@ -216,4 +221,8 @@ alter table vehicles add column if not exists red_stripe_expires      date;
 alter table waybills add column if not exists is_corrected boolean not null default false;
 alter table waybills add column if not exists corrected_at timestamptz;
 alter table waybills add column if not exists waybill_date date;
+alter table waybills add column if not exists created_by_name text;
+alter table waybills add column if not exists corrected_by_name text;
+create index if not exists idx_waybills_vehicle_date
+    on waybills(vehicle_id, waybill_date desc nulls last, created_at desc);
 update waybills set waybill_date = created_at::date where waybill_date is null;
