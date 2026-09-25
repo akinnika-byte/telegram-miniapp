@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-<title>АВТР(ПГ) — админ</title>
+<title>АВТР(ПГ) — управление</title>
 <script src="https://telegram.org/js/telegram-web-app.js"></script>
 <style>
   :root {
@@ -20,25 +20,50 @@
   html, body { margin: 0; padding: 0; }
   body { background: var(--bg); color: var(--text); min-height: 100vh;
          font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; font-size: 16px; }
-  .wrap { max-width: 760px; margin: 0 auto; padding: 16px 14px 44px; }
-  .screen { display: none; } .screen.active { display: block; animation: fade .25s ease; }
-  @keyframes fade { from { opacity: 0; transform: translateY(6px);} to { opacity: 1; transform: none;} }
+  .wrap { max-width: 680px; margin: 0 auto; padding: 16px 14px 44px; }
+  .screen { display: none; } .screen.active { display: block; animation: fade .26s cubic-bezier(.2,.7,.3,1); }
+  @keyframes fade { from { opacity: 0; transform: translateY(8px);} to { opacity: 1; transform: none;} }
 
-  h1 { font-size: 21px; margin: 0 0 4px; font-weight: 800; }
+  h1 { font-size: 22px; margin: 0 0 4px; font-weight: 800; letter-spacing: -.2px; }
   h2 { font-size: 18px; margin: 0 0 12px; font-weight: 700; }
-  .sub { color: var(--hint); font-size: 13px; margin: 0 0 16px; }
+  .sub { color: var(--hint); font-size: 13px; margin: 0 0 16px; line-height: 1.45; }
   .topbar { display: flex; justify-content: space-between; align-items: center; gap: 10px; margin-bottom: 14px; }
-  .link { color: var(--accent); font-size: 14px; background: none; border: none; cursor: pointer; padding: 6px; }
+  .link { color: var(--accent); font-size: 14px; background: none; border: none; cursor: pointer; padding: 6px; border-radius: 9px; }
 
+  /* ---- Вход ---- */
+  .center { text-align: center; }
+  .logo { font-size: 54px; line-height: 1; margin: 20px 0 6px; }
+  .dots { display: flex; justify-content: center; gap: 14px; margin: 20px 0 6px; }
+  .dot { width: 16px; height: 16px; border-radius: 50%; border: 2px solid var(--hint); transition: .15s; }
+  .dot.filled { background: var(--accent); border-color: var(--accent); transform: scale(1.15); }
+  .err { color: var(--bad); text-align: center; font-size: 14px; min-height: 20px; margin: 6px 0 12px; }
+  .keypad { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; max-width: 320px; margin: 0 auto; }
+  .key { height: 62px; border: none; border-radius: 16px; background: var(--card); color: var(--text);
+         font-size: 24px; font-weight: 700; cursor: pointer; transition: transform .08s, background .15s; }
+  .key:active { transform: scale(.92); background: var(--border); }
+  .key.blank { background: transparent; pointer-events: none; }
+  .powered { text-align: center; margin-top: 26px; color: var(--hint); font-size: 13px; }
+  .powered b { color: var(--accent); font-weight: 800; }
+
+  /* ---- Меню ---- */
+  .role-chip { display: inline-flex; align-items: center; gap: 8px; background: rgba(79,140,255,.14);
+               color: var(--accent); font-size: 13px; font-weight: 700; padding: 6px 12px; border-radius: 999px; }
+  .menu-item {
+    display: flex; align-items: center; gap: 14px; width: 100%; text-align: left;
+    background: var(--card); border: none; border-radius: 18px; padding: 15px 16px;
+    color: var(--text); margin-bottom: 10px; cursor: pointer; transition: transform .09s;
+  }
+  .menu-item:active { transform: scale(.98); }
+  .menu-item .ico { font-size: 24px; width: 42px; height: 42px; display: flex; align-items: center;
+                    justify-content: center; border-radius: 13px; background: rgba(128,140,170,.13); }
+  .menu-item .t { font-size: 16px; font-weight: 700; display: block; }
+  .menu-item .d { font-size: 12.5px; color: var(--hint); margin-top: 2px; }
+
+  /* ---- Контент ---- */
   select {
     width: 100%; height: 48px; border-radius: 12px; border: 1.5px solid var(--border);
     background: var(--card); color: var(--text); font-size: 16px; padding: 0 12px; outline: none; margin-bottom: 14px;
   }
-  .tabs { display: flex; gap: 8px; margin-bottom: 14px; overflow-x: auto; padding-bottom: 2px; }
-  .tab { flex: 0 0 auto; padding: 10px 15px; border-radius: 12px; border: 1.5px solid var(--border);
-         background: transparent; color: var(--hint); font-size: 14px; font-weight: 600; cursor: pointer; }
-  .tab.active { background: var(--accent); color: var(--accent-text); border-color: var(--accent); }
-
   .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(105px, 1fr)); gap: 10px; margin-bottom: 14px; }
   .stat { background: var(--card); border-radius: 14px; padding: 12px 14px; }
   .stat .n { font-size: 22px; font-weight: 800; font-variant-numeric: tabular-nums; }
@@ -67,10 +92,13 @@
                  background: var(--bg); color: var(--text); font-size: 16px; padding: 0 14px; outline: none; }
   .field input:focus { border-color: var(--accent); }
   .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 0 12px; }
+  .group-title { font-size: 12px; font-weight: 700; color: var(--hint); text-transform: uppercase;
+                 letter-spacing: .4px; margin: 0 0 8px; }
+
   .btn { width: 100%; height: 52px; border: none; border-radius: 15px; font-size: 16px; font-weight: 700; cursor: pointer; }
+  .btn:active { transform: scale(.98); }
   .btn.primary { background: var(--accent); color: var(--accent-text); }
   .btn.ghost { background: transparent; color: var(--accent); border: 1.5px solid var(--accent); }
-  .btn.danger { background: transparent; color: var(--bad); border: 1.5px solid var(--bad); }
   .btn + .btn { margin-top: 10px; }
 
   .act { padding: 12px 14px; border-bottom: 1px solid var(--border); font-size: 13px; }
@@ -81,20 +109,9 @@
           border-radius: 50%; margin: 40px auto; animation: sp 1s linear infinite; }
   @keyframes sp { to { transform: rotate(360deg); } }
   .empty { text-align: center; color: var(--hint); padding: 30px 10px; font-size: 14px; }
-  .keypad { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; max-width: 320px; margin: 0 auto; }
-  .key { height: 62px; border: none; border-radius: 16px; background: var(--card); color: var(--text);
-         font-size: 24px; font-weight: 700; cursor: pointer; }
-  .key:active { transform: scale(.94); }
-  .key.blank { background: transparent; pointer-events: none; }
-  .dots { display: flex; justify-content: center; gap: 14px; margin: 20px 0 8px; }
-  .dot { width: 16px; height: 16px; border-radius: 50%; border: 2px solid var(--hint); }
-  .dot.filled { background: var(--accent); border-color: var(--accent); }
-  .err { color: var(--bad); text-align: center; font-size: 14px; min-height: 20px; margin: 6px 0 12px; }
-  .powered { text-align: center; margin-top: 26px; color: var(--hint); font-size: 13px; }
-  .powered b { color: var(--accent); font-weight: 800; }
-  .toast { position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%) translateY(120%);
-           background: #111; color: #fff; padding: 12px 20px; border-radius: 14px; font-size: 14px;
-           transition: transform .3s; max-width: 90%; text-align: center; z-index: 50; }
+  .toast { position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%) translateY(140%);
+           background: #111; color: #fff; padding: 13px 20px; border-radius: 14px; font-size: 14px;
+           transition: transform .35s; max-width: 90%; text-align: center; z-index: 50; }
   .toast.show { transform: translateX(-50%) translateY(0); }
 </style>
 </head>
@@ -103,10 +120,11 @@
 
   <div class="screen active" id="scr-loading"><div class="spin"></div></div>
 
+  <!-- Вход (всегда при открытии) -->
   <div class="screen" id="scr-login">
-    <div style="text-align:center;margin-top:20px">
-      <div style="font-size:52px">🛠</div>
-      <h1>Вход</h1>
+    <div class="center">
+      <div class="logo">🛠</div>
+      <h1>АВТР(ПГ)</h1>
       <p class="sub">Введите код доступа</p>
     </div>
     <div class="dots" id="dots"><div class="dot"></div><div class="dot"></div><div class="dot"></div><div class="dot"></div></div>
@@ -122,40 +140,94 @@
     <div class="powered">powered by <b>botvinev</b></div>
   </div>
 
-  <div class="screen" id="scr-panel">
+  <!-- Меню -->
+  <div class="screen" id="scr-menu">
     <div class="topbar">
-      <div><h1 id="role-title">—</h1><p class="sub" id="who">—</p></div>
+      <div><h1>Панель управления</h1>
+        <div style="margin-top:6px;display:flex;gap:8px;align-items:center">
+          <span class="role-chip" id="role-title">—</span>
+          <span class="sub" id="who" style="margin:0">—</span>
+        </div>
+      </div>
       <button class="link" id="logout">Выйти</button>
     </div>
-    <select id="period-select"></select>
-    <div class="tabs" id="tabs"></div>
-    <div id="view"></div>
+    <button class="menu-item" data-screen="scr-report"><span class="ico">📊</span><span><span class="t">Отчёт</span><span class="d">Путевые по машинам за период</span></span></button>
+    <button class="menu-item" data-screen="scr-summary"><span class="ico">📋</span><span><span class="t">Сводка</span><span class="d">Суммы по каждой машине</span></span></button>
+    <button class="menu-item" data-screen="scr-activity"><span class="ico">🕘</span><span><span class="t">Активность</span><span class="d">Кто и что делал</span></span></button>
+    <button class="menu-item" data-screen="scr-vehicles"><span class="ico">🚚</span><span><span class="t">Машины</span><span class="d">Данные, документы, водители</span></span></button>
+    <button class="menu-item" data-screen="scr-drivers"><span class="ico">👥</span><span><span class="t">Водители</span><span class="d">Водительский состав</span></span></button>
+    <button class="menu-item" data-screen="scr-norms"><span class="ico">⛽</span><span><span class="t">Нормы расхода</span><span class="d">Топливо, моточасы, баки</span></span></button>
   </div>
 
+  <!-- Отчёт -->
+  <div class="screen" id="scr-report">
+    <div class="topbar"><button class="link" data-back>← Меню</button><h2 style="margin:0">Отчёт</h2></div>
+    <select id="sel-report"></select>
+    <div id="report-body"><div class="spin"></div></div>
+  </div>
+
+  <!-- Сводка -->
+  <div class="screen" id="scr-summary">
+    <div class="topbar"><button class="link" data-back>← Меню</button><h2 style="margin:0">Сводка</h2></div>
+    <select id="sel-summary"></select>
+    <div id="summary-body"><div class="spin"></div></div>
+  </div>
+
+  <!-- Активность -->
+  <div class="screen" id="scr-activity">
+    <div class="topbar"><button class="link" data-back>← Меню</button><h2 style="margin:0">Активность</h2></div>
+    <div id="activity-body"><div class="spin"></div></div>
+  </div>
+
+  <!-- Машины -->
+  <div class="screen" id="scr-vehicles">
+    <div class="topbar"><button class="link" data-back>← Меню</button><h2 style="margin:0">Машины</h2></div>
+    <button class="btn primary" id="veh-add" style="margin-bottom:12px">➕ Добавить машину</button>
+    <div id="vehicles-body"></div>
+  </div>
+
+  <!-- Нормы расхода -->
+  <div class="screen" id="scr-norms">
+    <div class="topbar"><button class="link" data-back>← Меню</button><h2 style="margin:0">Нормы расхода</h2></div>
+    <div id="norms-body"></div>
+  </div>
+
+  <!-- Водители -->
+  <div class="screen" id="scr-drivers">
+    <div class="topbar"><button class="link" data-back>← Меню</button><h2 style="margin:0">Водители</h2></div>
+    <div id="drivers-body"></div>
+  </div>
+
+  <!-- Форма машины -->
   <div class="screen" id="scr-form">
-    <div class="topbar"><button class="link" id="form-back">← Назад</button><span id="form-title" style="font-weight:700"></span></div>
+    <div class="topbar"><button class="link" data-backto="scr-vehicles">← Назад</button><span id="form-title" style="font-weight:700"></span></div>
     <div class="card" style="padding:16px"><div id="form"></div></div>
     <button class="btn primary" id="form-save">Сохранить</button>
     <button class="btn ghost" id="form-cancel" style="margin-top:10px">Отмена</button>
   </div>
 
-  <div class="screen" id="scr-driver">
-    <div class="topbar"><button class="link" id="drv-back">← Назад</button><span></span></div>
+  <!-- Карточка водителя -->
+  <div class="screen" id="scr-driver-card">
+    <div class="topbar"><button class="link" data-backto="scr-drivers">← Назад</button><span></span></div>
     <div id="drv-body"></div>
   </div>
+
+  <!-- Правка путевого -->
   <div class="screen" id="scr-waybill">
-    <div class="topbar"><button class="link" id="wb-back">← Назад</button><span id="wb-title" style="font-weight:700"></span></div>
+    <div class="topbar"><button class="link" data-backto="scr-report">← Назад</button><span id="wb-title" style="font-weight:700"></span></div>
     <div class="card" style="padding:16px"><div class="grid2" id="wb-form"></div></div>
     <button class="btn primary" id="wb-save">Проверить и сохранить</button>
     <button class="btn ghost" id="wb-cancel" style="margin-top:10px">Отмена</button>
   </div>
+
 </div>
 <div class="toast" id="toast"></div>
 
 <script>
 const tg = window.Telegram && window.Telegram.WebApp ? window.Telegram.WebApp : null;
 let session = null, periods = [], currentPeriod = null, pin = "";
-let vehiclesCache = [], editing = null, activeTab = "report", reportItems = {};
+let cache = {}, lastSig = null, editingWb = null;
+const openCards = new Set();
 
 const $ = (id) => document.getElementById(id);
 const api = async (path, opts = {}) => {
@@ -173,33 +245,37 @@ const dstr = (s) => s ? new Date(s).toLocaleDateString("ru-RU") : "—";
 const toast = (m) => { const t = $("toast"); t.textContent = m; t.classList.add("show");
   clearTimeout(t._t); t._t = setTimeout(() => t.classList.remove("show"), 2600); };
 
-const isTech = () => session && (session.role === "technician" || session.role === "commander");
-
+/* ---------- Запуск: всегда вход ---------- */
 async function boot() {
   if (!tg || !tg.initData) {
     document.body.innerHTML = "<div class='wrap'><h1>Откройте через Telegram</h1><p class='sub'>Панель доступна только внутри мини-приложения.</p></div>";
     return;
   }
   tg.ready();
-  try { session = await api("/api/session", { method: "POST" }); }
-  catch (e) { document.body.innerHTML = "<div class='wrap'><h1>Ошибка сервера</h1><p class='sub'>" + esc(e.message) + "</p></div>"; return; }
-  if (!session.is_admin) { show("scr-login"); return; }
-  startPanel();
+  if (location.hash === "#just") {
+    try { history.replaceState(null, "", location.pathname); } catch (e) {}
+    try {
+      session = await api("/api/session", { method: "POST" });
+      if (session && session.is_admin) { await startPanel(); return; }
+    } catch (e) {}
+  }
+  show("scr-login");
 }
 
-/* ---------- PIN ---------- */
+/* ---------- Вход ---------- */
 function renderDots() { $("dots").querySelectorAll(".dot").forEach((d, i) => d.classList.toggle("filled", i < pin.length)); }
 $("keypad").addEventListener("click", (e) => {
   const k = e.target.dataset.k; if (!k) return;
   if (k === "del") pin = pin.slice(0, -1); else if (pin.length < 4) pin += k;
   renderDots(); $("err").textContent = "";
-  if (pin.length === 4) setTimeout(login, 120);
+  if (pin.length === 4) setTimeout(login, 140);
 });
 async function login() {
   try {
-    await api("/api/login", { method: "POST", body: JSON.stringify({ code: pin }) });
+    const data = await api("/api/login", { method: "POST", body: JSON.stringify({ code: pin }) });
+    if (data.kind === "driver") { window.location.href = "/"; return; }
     session = await api("/api/session", { method: "POST" });
-    startPanel();
+    await startPanel();
   } catch (e) { $("err").textContent = e.message; pin = ""; renderDots(); }
 }
 $("logout").addEventListener("click", async () => {
@@ -207,152 +283,168 @@ $("logout").addEventListener("click", async () => {
   window.location.href = "/";
 });
 
-/* ---------- Панель и вкладки ---------- */
-const TABS = [
-  { id: "report", title: "Отчёт", tech: false },
-  { id: "summary", title: "Сводка", tech: false },
-  { id: "activity", title: "Активность", tech: false },
-  { id: "vehicles", title: "Машины", tech: true },
-  { id: "drivers", title: "Водители", tech: true },
-  { id: "norms", title: "Нормы расхода", tech: true },
-];
+/* ---------- Загрузка всех данных сразу ---------- */
+async function loadPeriods() {
+  periods = await api("/api/periods");
+  const today = new Date().toISOString().slice(0, 10);
+  const cur = periods.find(p => p.start_date <= today && today <= p.end_date);
+  currentPeriod = cur ? cur.id : (periods[0] ? periods[0].id : null);
+  const opts = periods.map(p =>
+    `<option value="${p.id}">${esc(p.name)} — ${p.start_date} … ${p.end_date}</option>`).join("");
+  ["sel-report", "sel-summary"].forEach(id => {
+    $(id).innerHTML = opts;
+    if (currentPeriod) $(id).value = currentPeriod;
+  });
+}
+
+async function refreshAll() {
+  if (!currentPeriod) return;
+  const [report, summary, activity, vehicles, drivers] = await Promise.all([
+    api(`/api/admin/report?period_id=${currentPeriod}`).catch(e => ({ error: e.message })),
+    api(`/api/admin/summary?period_id=${currentPeriod}`).catch(e => ({ error: e.message })),
+    api("/api/admin/activity?limit=100").catch(e => ({ error: e.message })),
+    api("/api/admin/vehicles").catch(e => ({ error: e.message })),
+    api("/api/admin/drivers").catch(e => ({ error: e.message })),
+  ]);
+  cache = { report, summary, activity, vehicles, drivers };
+  lastSig = (report && report.sig) || null;
+}
 
 async function startPanel() {
-  show("scr-panel");
   $("role-title").textContent = session.role_title || "Администратор";
   $("who").textContent = session.name || "";
-  $("tabs").innerHTML = TABS
-    .map(t => `<button class="tab" data-tab="${t.id}">${t.title}</button>`).join("");
-  document.querySelectorAll(".tab").forEach(el => el.addEventListener("click", () => switchTab(el.dataset.tab)));
-  await loadPeriods();
-  switchTab("report");
-}
-function switchTab(id) {
-  activeTab = id;
-  document.querySelectorAll(".tab").forEach(el => el.classList.toggle("active", el.dataset.tab === id));
-  $("period-select").style.display = (id === "report" || id === "summary") ? "" : "none";
-  render();
-}
-async function loadPeriods() {
+  show("scr-menu");
   try {
-    periods = await api("/api/periods");
-    const today = new Date().toISOString().slice(0, 10);
-    const cur = periods.find(p => p.start_date <= today && today <= p.end_date);
-    currentPeriod = cur ? cur.id : (periods[0] ? periods[0].id : null);
-    $("period-select").innerHTML = periods.map(p =>
-      `<option value="${p.id}">${esc(p.name)} — ${p.start_date} … ${p.end_date}</option>`).join("");
-    if (currentPeriod) $("period-select").value = currentPeriod;
-  } catch (e) { /* показать ошибку при отрисовке */ }
+    await loadPeriods();
+    await refreshAll();
+  } catch (e) { toast(e.message); }
 }
-$("period-select").addEventListener("change", (e) => { currentPeriod = parseInt(e.target.value, 10); render(); });
 
-function render() {
-  const v = $("view");
-  if (activeTab === "report") return loadReport(v);
-  if (activeTab === "summary") return loadSummary(v);
-  if (activeTab === "activity") return loadActivity(v);
-  if (activeTab === "vehicles") return loadVehicles(v, "full");
-  if (activeTab === "norms") return loadVehicles(v, "norms");
-  if (activeTab === "drivers") return loadDrivers(v);
+/* ---------- Навигация ---------- */
+document.querySelectorAll(".menu-item").forEach(b => b.addEventListener("click", () => {
+  const id = b.dataset.screen;
+  show(id);
+  renderScreen(id);
+}));
+document.querySelectorAll("[data-back]").forEach(b => b.addEventListener("click", () => show("scr-menu")));
+document.querySelectorAll("[data-backto]").forEach(b => b.addEventListener("click", () => {
+  show(b.dataset.backto); renderScreen(b.dataset.backto);
+}));
+
+function renderScreen(id) {
+  if (id === "scr-report") return renderReport();
+  if (id === "scr-summary") return renderSummary();
+  if (id === "scr-activity") return renderActivity();
+  if (id === "scr-vehicles") return renderVehicles($("vehicles-body"), "full");
+  if (id === "scr-norms") return renderVehicles($("norms-body"), "norms");
+  if (id === "scr-drivers") return renderDrivers();
 }
+
+["sel-report", "sel-summary"].forEach(sel => $(sel).addEventListener("change", async (e) => {
+  currentPeriod = parseInt(e.target.value, 10);
+  const other = e.target.id === "sel-report" ? "sel-summary" : "sel-report";
+  $(other).value = currentPeriod;
+  await refreshAll();
+  renderReport(); renderSummary();
+}));
 
 /* ---------- Отчёт ---------- */
-async function loadReport(box) {
-  if (!currentPeriod) { box.innerHTML = '<div class="empty">Нет периодов</div>'; return; }
-  box.innerHTML = '<div class="spin"></div>';
-  try {
-    const data = await api("/api/admin/report?period_id=" + currentPeriod);
-    reportItems = {};
-    (data.groups || []).forEach(g => (g.items || []).forEach(it => {
-      reportItems[it.id] = { ...it, plate: g.plate };
-    }));
-    if (!data.groups.length) { box.innerHTML = '<div class="empty">За этот период путевых листов нет</div>'; return; }
-    box.innerHTML =
-      `<div class="stats">
-         <div class="stat"><div class="n">${data.total_count}</div><div class="t">Путёвок</div></div>
-         <div class="stat"><div class="n">${data.groups.length}</div><div class="t">Машин</div></div>
-         <div class="stat"><div class="n" style="color:${data.total_bad ? "var(--bad)" : "var(--ok)"}">${data.total_bad}</div><div class="t">С расхождением</div></div>
-       </div>` +
-      data.groups.map(g => `
-        <div class="card" data-key="${esc(g.plate)}">
-          <div class="row" data-toggle>
-            <div><div class="plate">${esc(g.plate)}</div><div class="meta">${esc(g.model)} · путёвок: ${g.count}</div></div>
-            <div class="right"><span class="badge ${g.has_bad ? "bad" : "ok"}">${g.has_bad ? "РАСХОЖДЕНИЕ" : "OK"}</span>
-              <div style="margin-top:6px">${nf(g.total_km)} км · ${nf(g.fuel_spent)} л</div></div>
+function renderReport() {
+  const box = $("report-body");
+  const data = cache.report;
+  if (!data) { box.innerHTML = '<div class="spin"></div>'; return; }
+  if (data.error) { box.innerHTML = `<div class="empty">${esc(data.error)}</div>`; return; }
+  if (!data.groups.length) { box.innerHTML = '<div class="empty">За этот период путевых листов нет</div>'; return; }
+  box.innerHTML =
+    `<div class="stats">
+       <div class="stat"><div class="n">${data.total_count}</div><div class="t">Путёвок</div></div>
+       <div class="stat"><div class="n">${data.groups.length}</div><div class="t">Машин</div></div>
+       <div class="stat"><div class="n" style="color:${data.total_bad ? "var(--bad)" : "var(--ok)"}">${data.total_bad}</div><div class="t">С расхождением</div></div>
+     </div>` +
+    data.groups.map(g => `
+      <div class="card" data-key="${esc(g.plate)}">
+        <div class="row" data-toggle>
+          <div><div class="plate">${esc(g.plate)}</div><div class="meta">${esc(g.model)} · путёвок: ${g.count}</div></div>
+          <div class="right"><span class="badge ${g.has_bad ? "bad" : "ok"}">${g.has_bad ? "РАСХОЖДЕНИЕ" : "OK"}</span>
+            <div style="margin-top:6px">${nf(g.total_km)} км · ${nf(g.fuel_spent)} л</div></div>
+        </div>
+        <div class="detail">${g.items.map(it => `
+          <div class="item">
+            <div class="head"><b>№${esc(it.waybill_no)}</b>
+              <span>${it.is_corrected ? '<span class="badge warn">ИСПРАВЛЕН</span> ' : ""}<span class="badge ${it.is_ok ? "ok" : "bad"}">${it.is_ok ? "OK" : "РАСХОЖДЕНИЕ"}</span></span></div>
+            <div class="kv">
+              <span>Пробег: <b>${nf(it.total_km)} км</b></span>
+              <span>Топл. расчёт: <b>${nf(it.fuel_calc)} л</b></span>
+              <span>Получено: <b>${nf(it.fuel_in)} л</b></span>
+              <span>Затрачено: <b>${nf(it.fuel_spent)} л</b></span>
+              <span>Бак нач/кон: <b>${nf(it.tank_start)} / ${nf(it.tank_end)} л</b></span>
+              <span>Моточасы: <b>${nf(it.motohours)}</b></span>
+            </div>
+            ${it.author ? `<div class="meta" style="margin-top:6px">Внёс: ${esc(it.author)}</div>` : ""}
+            <button class="link" data-wb="${it.id}" style="padding:8px 0 0">✏️ Изменить</button>
+          </div>`).join("")}</div>
+      </div>`).join("");
+  bindToggles(box);
+  box.querySelectorAll("[data-wb]").forEach(b => b.addEventListener("click", (e) => {
+    e.stopPropagation();
+    const item = findReportItem(b.dataset.wb);
+    if (item) openWaybillForm(item);
+  }));
+}
+
+function findReportItem(id) {
+  for (const g of (cache.report ? cache.report.groups : []))
+    for (const it of g.items) if (String(it.id) === String(id)) return { ...it, plate: g.plate };
+  return null;
+}
+
+/* ---------- Сводка ---------- */
+function renderSummary() {
+  const box = $("summary-body");
+  const data = cache.summary;
+  if (!data) { box.innerHTML = '<div class="spin"></div>'; return; }
+  if (data.error) { box.innerHTML = `<div class="empty">${esc(data.error)}</div>`; return; }
+  if (!data.rows.length) { box.innerHTML = '<div class="empty">Нет данных</div>'; return; }
+  const t = data.totals;
+  box.innerHTML =
+    `<div class="stats">
+       <div class="stat"><div class="n">${data.rows.length}</div><div class="t">Машин</div></div>
+       <div class="stat"><div class="n">${t.wb_count}</div><div class="t">Путёвок</div></div>
+       <div class="stat"><div class="n">${nf(t.total_km, 0)}</div><div class="t">Всего км</div></div>
+       <div class="stat"><div class="n">${nf(t.fuel_spent, 0)}</div><div class="t">Всего топлива, л</div></div>
+     </div>` +
+    data.rows.map(g => `
+      <div class="card" data-key="${esc(g.plate)}">
+        <div class="row" data-toggle>
+          <div><div class="plate">${esc(g.plate)}</div><div class="meta">${esc(g.model)} · путёвок: ${g.wb_count}</div></div>
+          <div class="right"><span class="badge ${g.has_bad ? "bad" : "ok"}">${g.has_bad ? "РАСХОЖДЕНИЕ" : "OK"}</span>
+            <div style="margin-top:6px">${nf(g.total_km)} км · ${nf(g.fuel_spent)} л</div></div>
+        </div>
+        <div class="detail">
+          <div class="item" style="background:rgba(128,140,170,.08)">
+            <div class="kv">
+              <span>Получено: <b>${nf(g.fuel_in)} л</b></span>
+              <span>Затрачено (факт): <b>${nf(g.fuel_spent)} л</b></span>
+              <span>Затрачено (расчёт): <b>${nf(g.fuel_calc)} л</b></span>
+              <span>Пробег: <b>${nf(g.total_km)} км</b></span>
+            </div>
           </div>
-          <div class="detail">${g.items.map(it => `
+          ${g.items.map(it => `
             <div class="item">
               <div class="head"><b>№${esc(it.waybill_no)}</b>
                 <span>${it.is_corrected ? '<span class="badge warn">ИСПРАВЛЕН</span> ' : ""}<span class="badge ${it.is_ok ? "ok" : "bad"}">${it.is_ok ? "OK" : "РАСХОЖДЕНИЕ"}</span></span></div>
               <div class="kv">
                 <span>Пробег: <b>${nf(it.total_km)} км</b></span>
-                <span>Топл. расчёт: <b>${nf(it.fuel_calc)} л</b></span>
                 <span>Получено: <b>${nf(it.fuel_in)} л</b></span>
                 <span>Затрачено: <b>${nf(it.fuel_spent)} л</b></span>
-                <span>Бак нач/кон: <b>${nf(it.tank_start)} / ${nf(it.tank_end)} л</b></span>
-                <span>Моточасы: <b>${nf(it.motohours)}</b></span>
+                <span>Расчёт: <b>${nf(it.fuel_calc)} л</b></span>
               </div>
-              ${it.author ? `<div class="meta" style="margin-top:6px">Внёс: ${esc(it.author)}</div>` : ""}
-              <button class="link" data-wb="${it.id}" style="padding:8px 0 0">✏️ Изменить</button>
-            </div>`).join("")}</div>
-        </div>`).join("");
-    bindToggles(box);
-    box.querySelectorAll("[data-wb]").forEach(b => b.addEventListener("click", (e) => {
-      e.stopPropagation();
-      openWaybillForm(reportItems[b.dataset.wb]);
-    }));
-    if (data.sig) lastSig = data.sig;
-  } catch (e) { box.innerHTML = `<div class="empty">${esc(e.message)}</div>`; }
+            </div>`).join("")}
+        </div>
+      </div>`).join("");
+  bindToggles(box);
 }
 
-/* ---------- Сводка (с раскрытием) ---------- */
-async function loadSummary(box) {
-  if (!currentPeriod) { box.innerHTML = '<div class="empty">Нет периодов</div>'; return; }
-  box.innerHTML = '<div class="spin"></div>';
-  try {
-    const data = await api("/api/admin/summary?period_id=" + currentPeriod);
-    if (!data.rows.length) { box.innerHTML = '<div class="empty">Нет данных</div>'; return; }
-    const t = data.totals;
-    box.innerHTML =
-      `<div class="stats">
-         <div class="stat"><div class="n">${data.rows.length}</div><div class="t">Машин</div></div>
-         <div class="stat"><div class="n">${t.wb_count}</div><div class="t">Путёвок</div></div>
-         <div class="stat"><div class="n">${nf(t.total_km, 0)}</div><div class="t">Всего км</div></div>
-         <div class="stat"><div class="n">${nf(t.fuel_spent, 0)}</div><div class="t">Всего топлива, л</div></div>
-       </div>` +
-      data.rows.map(g => `
-        <div class="card" data-key="${esc(g.plate)}">
-          <div class="row" data-toggle>
-            <div><div class="plate">${esc(g.plate)}</div><div class="meta">${esc(g.model)} · путёвок: ${g.wb_count}</div></div>
-            <div class="right"><span class="badge ${g.has_bad ? "bad" : "ok"}">${g.has_bad ? "РАСХОЖДЕНИЕ" : "OK"}</span>
-              <div style="margin-top:6px">${nf(g.total_km)} км · ${nf(g.fuel_spent)} л</div></div>
-          </div>
-          <div class="detail">
-            <div class="item" style="background:rgba(128,140,170,.08)">
-              <div class="kv">
-                <span>Получено: <b>${nf(g.fuel_in)} л</b></span>
-                <span>Затрачено (факт): <b>${nf(g.fuel_spent)} л</b></span>
-                <span>Затрачено (расчёт): <b>${nf(g.fuel_calc)} л</b></span>
-                <span>Пробег: <b>${nf(g.total_km)} км</b></span>
-              </div>
-            </div>
-            ${g.items.map(it => `
-              <div class="item">
-                <div class="head"><b>№${esc(it.waybill_no)}</b>
-                  <span>${it.is_corrected ? '<span class="badge warn">ИСПРАВЛЕН</span> ' : ""}<span class="badge ${it.is_ok ? "ok" : "bad"}">${it.is_ok ? "OK" : "РАСХОЖДЕНИЕ"}</span></span></div>
-                <div class="kv">
-                  <span>Пробег: <b>${nf(it.total_km)} км</b></span>
-                  <span>Получено: <b>${nf(it.fuel_in)} л</b></span>
-                  <span>Затрачено: <b>${nf(it.fuel_spent)} л</b></span>
-                  <span>Расчёт: <b>${nf(it.fuel_calc)} л</b></span>
-                </div>
-              </div>`).join("")}
-          </div>
-        </div>`).join("");
-    bindToggles(box);
-    if (data.sig) lastSig = data.sig;
-  } catch (e) { box.innerHTML = `<div class="empty">${esc(e.message)}</div>`; }
-}
 function bindToggles(box) {
   box.querySelectorAll("[data-toggle]").forEach(r => {
     const card = r.closest(".card");
@@ -366,79 +458,73 @@ function bindToggles(box) {
   });
 }
 
-const openCards = new Set();
-
 /* ---------- Активность ---------- */
 const ACTIONS = {
   driver_login: "Вход водителя", admin_login: "Вход администратора", logout: "Выход",
   create_waybill: "Создан путевой", update_waybill: "Изменён путевой",
   create_vehicle: "Добавлена машина", update_vehicle: "Изменена машина",
 };
-async function loadActivity(box) {
-  box.innerHTML = '<div class="spin"></div>';
-  try {
-    const rows = await api("/api/admin/activity?limit=100");
-    if (!rows.length) { box.innerHTML = '<div class="empty">Активности пока нет</div>'; return; }
-    box.innerHTML = `<div class="card">` + rows.map(r => `
-      <div class="act">
-        <div class="a"><b>${esc(ACTIONS[r.action] || r.action)}</b>
-          <span style="color:var(--hint)">${new Date(r.created_at).toLocaleString("ru-RU")}</span></div>
-        ${r.actor_name ? `<div class="who">${esc(r.actor_name)}${r.role ? " · " + esc(r.role) : ""}</div>` : ""}
-      </div>`).join("") + `</div>`;
-  } catch (e) { box.innerHTML = `<div class="empty">${esc(e.message)}</div>`; }
+function renderActivity() {
+  const box = $("activity-body");
+  const rows = cache.activity;
+  if (!rows) { box.innerHTML = '<div class="spin"></div>'; return; }
+  if (rows.error) { box.innerHTML = `<div class="empty">${esc(rows.error)}</div>`; return; }
+  if (!rows.length) { box.innerHTML = '<div class="empty">Активности пока нет</div>'; return; }
+  box.innerHTML = `<div class="card">` + rows.map(r => `
+    <div class="act">
+      <div class="a"><b>${esc(ACTIONS[r.action] || r.action)}</b>
+        <span style="color:var(--hint)">${new Date(r.created_at).toLocaleString("ru-RU")}</span></div>
+      ${r.actor_name ? `<div class="who">${esc(r.actor_name)}${r.role ? " · " + esc(r.role) : ""}</div>` : ""}
+    </div>`).join("") + `</div>`;
 }
 
 /* ---------- Машины / Нормы ---------- */
-async function loadVehicles(box, mode) {
-  box.innerHTML = '<div class="spin"></div>';
-  try {
-    vehiclesCache = await api("/api/admin/vehicles");
-    const btn = `<button class="btn primary" id="veh-add" style="margin-bottom:12px">➕ Добавить машину</button>`;
-    if (!vehiclesCache.length) { box.innerHTML = btn + '<div class="empty">Машин нет</div>'; $("veh-add").addEventListener("click", () => openVehicleForm(null)); return; }
-    box.innerHTML = btn + vehiclesCache.map(v => {
-      const nums = mode === "norms"
-        ? `<div class="kv"><span>Норма: <b>${v.fuel_norm} л/100км</b></span><span>Моточас: <b>${v.motohour_norm}</b></span>
-           <span>Бак: <b>${v.tank_capacity} л</b></span><span>${v.is_active ? "активна" : "не активна"}</span></div>`
-        : `<div class="meta">${esc(v.model)}${v.driver_name ? " · " + esc(v.driver_name) : ""}</div>`;
-      return `<div class="card"><div class="row" data-plate="${esc(v.plate)}">
-          <div><div class="plate">${esc(v.plate)}</div>${nums}</div>
-          <div class="right" style="color:var(--accent)">изменить ›</div>
-        </div></div>`;
-    }).join("");
-    box.querySelectorAll("[data-plate]").forEach(r => r.addEventListener("click", () => {
-      const v = vehiclesCache.find(x => String(x.plate) === r.dataset.plate);
-      openVehicleForm(v);
-    }));
-  } catch (e) { box.innerHTML = `<div class="empty">${esc(e.message)}</div>`; }
+function renderVehicles(box, mode) {
+  const list = cache.vehicles;
+  if (!list) { box.innerHTML = '<div class="spin"></div>'; return; }
+  if (list.error) { box.innerHTML = `<div class="empty">${esc(list.error)}</div>`; return; }
+  if (!list.length) { box.innerHTML = '<div class="empty">Машин нет</div>'; return; }
+  box.innerHTML = list.map(v => {
+    const nums = mode === "norms"
+      ? `<div class="kv"><span>Норма: <b>${v.fuel_norm} л/100км</b></span><span>Моточас: <b>${v.motohour_norm}</b></span>
+         <span>Бак: <b>${v.tank_capacity} л</b></span><span>${v.is_active ? "активна" : "не активна"}</span></div>`
+      : `<div class="meta">${esc(v.model)}${v.driver_name ? " · " + esc(v.driver_name) : ""}</div>`;
+    return `<div class="card"><div class="row" data-plate="${esc(v.plate)}">
+        <div><div class="plate">${esc(v.plate)}</div>${nums}</div>
+        <div class="right" style="color:var(--accent)">изменить ›</div>
+      </div></div>`;
+  }).join("");
+  box.querySelectorAll("[data-plate]").forEach(r => r.addEventListener("click", () => {
+    const v = (cache.vehicles || []).find(x => String(x.plate) === r.dataset.plate);
+    openVehicleForm(v);
+  }));
 }
 
 /* ---------- Водители ---------- */
-async function loadDrivers(box) {
-  box.innerHTML = '<div class="spin"></div>';
-  try {
-    const [rows, vehs] = await Promise.all([
-      api("/api/admin/drivers"), api("/api/admin/vehicles"),
-    ]);
-    vehiclesCache = vehs;
-    if (!rows.length) { box.innerHTML = '<div class="empty">Машин нет</div>'; return; }
-    box.innerHTML = rows.map(d => `
-      <div class="card"><div class="row" data-plate="${esc(d.plate)}">
-        <div><div class="plate">${esc(d.plate)}</div>
-          <div class="meta">${d.driver_name ? esc(d.driver_name) : "водитель не указан"} · путёвок: ${d.waybill_count}</div></div>
-        <div class="right" style="color:var(--accent)">профиль ›</div>
-      </div></div>`).join("");
-    box.querySelectorAll("[data-plate]").forEach(r => r.addEventListener("click", () => openDriverCard(r.dataset.plate)));
-  } catch (e) { box.innerHTML = `<div class="empty">${esc(e.message)}</div>`; }
+function renderDrivers() {
+  const box = $("drivers-body");
+  const rows = cache.drivers;
+  if (!rows) { box.innerHTML = '<div class="spin"></div>'; return; }
+  if (rows.error) { box.innerHTML = `<div class="empty">${esc(rows.error)}</div>`; return; }
+  if (!rows.length) { box.innerHTML = '<div class="empty">Машин нет</div>'; return; }
+  box.innerHTML = rows.map(d => `
+    <div class="card"><div class="row" data-drv="${esc(d.plate)}">
+      <div><div class="plate">${esc(d.plate)}</div>
+        <div class="meta">${d.driver_name ? esc(d.driver_name) : "водитель не указан"} · путёвок: ${d.waybill_count}</div></div>
+      <div class="right" style="color:var(--accent)">профиль ›</div>
+    </div></div>`).join("");
+  box.querySelectorAll("[data-drv]").forEach(r =>
+    r.addEventListener("click", () => openDriverCard(r.dataset.drv)));
 }
 
+/* ---------- Карточка водителя ---------- */
 function openDriverCard(plate) {
-  show("scr-driver");
+  show("scr-driver-card");
   $("drv-body").innerHTML = '<div class="spin"></div>';
   Promise.all([
-    api("/api/admin/drivers"),
     api("/api/admin/vehicle-waybills?plate=" + encodeURIComponent(plate)),
-  ]).then(([rows, wbs]) => {
-    const r = rows.find(x => String(x.plate) === plate) || {};
+  ]).then(([wbs]) => {
+    const r = (cache.drivers || []).find(x => String(x.plate) === plate) || {};
     $("drv-body").innerHTML = `
       <div class="card" style="padding:16px">
         <div class="kv" style="grid-template-columns:1fr">
@@ -477,12 +563,11 @@ function openDriverCard(plate) {
       rr.addEventListener("click", () =>
         rr.parentElement.querySelector(".detail").classList.toggle("open")));
     $("drv-edit").addEventListener("click", () => {
-      const v = (vehiclesCache || []).find(x => String(x.plate) === plate);
+      const v = (cache.vehicles || []).find(x => String(x.plate) === plate);
       openVehicleForm(v);
     });
   }).catch(e => { $("drv-body").innerHTML = `<div class="empty">${esc(e.message)}</div>`; });
 }
-$("drv-back").addEventListener("click", () => { show("scr-panel"); render(); });
 
 /* ---------- Форма машины ---------- */
 const FORM_GROUPS = [
@@ -506,13 +591,14 @@ const FORM_GROUPS = [
   ]],
 ];
 const FORM_FIELDS = FORM_GROUPS.flatMap(g => g[1]);
+let editing = null;
 
 function openVehicleForm(v) {
   editing = v ? { ...v } : null;
   $("form-title").textContent = v ? `Машина ${v.plate}` : "Новая машина";
   $("form").innerHTML = FORM_GROUPS.map(([title, fields]) => `
     <div style="margin-bottom:18px">
-      <div style="font-size:12px;font-weight:700;color:var(--hint);text-transform:uppercase;letter-spacing:.4px;margin-bottom:8px">${title}</div>
+      <div class="group-title">${title}</div>
       <div class="grid2">${fields.map(([key, label, type]) => {
         let val = v && v[key] != null ? v[key] : "";
         if (type === "date" && val) val = String(val).slice(0, 10);
@@ -522,8 +608,8 @@ function openVehicleForm(v) {
     </div>`).join("");
   show("scr-form");
 }
-$("form-back").addEventListener("click", () => { show("scr-panel"); render(); });
-$("form-cancel").addEventListener("click", () => { show("scr-panel"); render(); });
+$("form-back").addEventListener("click", () => { show("scr-vehicles"); renderVehicles($("vehicles-body"), "full"); });
+$("form-cancel").addEventListener("click", () => { show("scr-vehicles"); renderVehicles($("vehicles-body"), "full"); });
 $("form-save").addEventListener("click", async () => {
   const body = { id: editing ? editing.id : null, is_active: true };
   FORM_FIELDS.forEach(([key]) => { const el = $("vf-" + key); body[key] = el ? el.value : ""; });
@@ -531,11 +617,13 @@ $("form-save").addEventListener("click", async () => {
   try {
     await api("/api/admin/vehicles/save", { method: "POST", body: JSON.stringify(body) });
     toast("Сохранено ✓");
-    show("scr-panel"); render();
+    cache.vehicles = await api("/api/admin/vehicles").catch(() => cache.vehicles);
+    cache.drivers = await api("/api/admin/drivers").catch(() => cache.drivers);
+    show("scr-vehicles"); renderVehicles($("vehicles-body"), "full");
   } catch (e) { toast(e.message); }
 });
 
-/* ---------- Редактирование путевого ---------- */
+/* ---------- Правка путевого ---------- */
 const WB_FIELDS = [
   ["waybill_no", "№ путевого листа", "text"],
   ["waybill_date", "Дата", "date"],
@@ -549,8 +637,6 @@ const WB_FIELDS = [
   ["fuel_spent", "Затрачено топлива, л", "decimal"],
   ["motohours", "Моточасы", "decimal"],
 ];
-let editingWb = null;
-
 function openWaybillForm(it) {
   if (!it) return;
   editingWb = it;
@@ -563,8 +649,8 @@ function openWaybillForm(it) {
   }).join("");
   show("scr-waybill");
 }
-$("wb-back").addEventListener("click", () => { show("scr-panel"); render(); });
-$("wb-cancel").addEventListener("click", () => { show("scr-panel"); render(); });
+$("wb-back").addEventListener("click", () => { show("scr-report"); renderReport(); });
+$("wb-cancel").addEventListener("click", () => { show("scr-report"); renderReport(); });
 $("wb-save").addEventListener("click", async () => {
   const b = $("wb-save");
   const body = {
@@ -581,33 +667,35 @@ $("wb-save").addEventListener("click", async () => {
     const data = await api("/api/waybill/save", { method: "POST", body: JSON.stringify(body) });
     toast(data.is_ok ? "Исправлено ✓" : "Сохранено, но есть расхождения");
     if (tg && tg.HapticFeedback) tg.HapticFeedback.notificationOccurred("success");
-    show("scr-panel"); render();
+    await refreshAll();
+    show("scr-report"); renderReport();
   } catch (e) { toast(e.message); }
   finally { b.disabled = false; b.textContent = "Проверить и сохранить"; }
 });
 
-/* ---------- Живое обновление (только при изменениях) ---------- */
-let lastSig = null;
-
-async function pollChanges() {
+/* ---------- Живое обновление: только при изменениях ---------- */
+setInterval(async () => {
   if (document.visibilityState !== "visible") return;
-  const panel = $("scr-panel");
-  if (!panel || !panel.classList.contains("active")) return;
-  if (!["report", "summary"].includes(activeTab) || !currentPeriod) return;
+  if (!currentPeriod) return;
+  const act = document.querySelector(".screen.active");
   try {
     const { sig } = await api(`/api/admin/version?period_id=${currentPeriod}`);
-    if (lastSig !== null && sig !== lastSig) render();   // что-то добавили/исправили
+    if (lastSig !== null && sig !== lastSig) {
+      await refreshAll();
+      if (act && (act.id === "scr-report" || act.id === "scr-summary")) renderScreen(act.id);
+    }
     lastSig = sig;
-  } catch (e) { /* тихо игнорируем сетевые сбои */ }
-}
-setInterval(pollChanges, 8000);
+  } catch (e) {}
+}, 8000);
 
-document.addEventListener("visibilitychange", () => {
-  const panel = $("scr-panel");
-  if (document.visibilityState === "visible" && panel && panel.classList.contains("active")) {
-    lastSig = null;
-    pollChanges();
-  }
+document.addEventListener("visibilitychange", async () => {
+  if (document.visibilityState !== "visible") return;
+  const act = document.querySelector(".screen.active");
+  if (!act || act.id === "scr-login" || act.id === "scr-loading") return;
+  try {
+    await refreshAll();
+    renderScreen(act.id);
+  } catch (e) {}
 });
 
 renderDots();

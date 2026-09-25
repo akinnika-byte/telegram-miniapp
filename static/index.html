@@ -379,8 +379,7 @@ async function boot() {
 async function loadSession() {
   try { session = await api("/api/session", { method: "POST" }); }
   catch (e) { $("err-text").textContent = e.message; show("scr-error"); return; }
-  if (session.is_admin) { window.location.href = "/admin"; return; }
-  openLock();
+  openLock();   // код вводится при каждом открытии
 }
 
 /* ---------- Вход ---------- */
@@ -401,10 +400,11 @@ async function submitPin() {
   show("scr-checking");
   try {
     const data = await api("/api/login", { method: "POST", body: JSON.stringify({ code }) });
-    if (data.kind === "admin") { window.location.href = "/admin"; return; }
+    if (data.kind === "admin") { window.location.href = "/admin#just"; return; }
     vehicle = data.vehicle;
     buzz("success");
     openMenu();
+    prefetchDriver();
   } catch (e) {
     buzz("error");
     show("scr-lock");
@@ -460,12 +460,26 @@ $("prof-back").addEventListener("click", openMenu);
 
 /* ---------- Мои путёвки ---------- */
 let historyRows = [];
+const dcache = {};
+
+async function prefetchDriver() {
+  try {
+    const [wb, v, p] = await Promise.all([
+      api("/api/driver/waybills"), api("/api/driver/vehicle"), api("/api/driver/profile"),
+    ]);
+    dcache.waybills = wb; dcache.vehicle = v; dcache.profile = p;
+  } catch (e) { /* загрузим при открытии раздела */ }
+}
 
 async function loadHistory() {
-  show("scr-history"); $("hist-list").innerHTML = '<div class="spinner"></div>';
-  try {
-    const rows = await api("/api/driver/waybills");
-    historyRows = rows;
+  show("scr-history");
+  let rows = dcache.waybills;
+  if (!rows) {
+    $("hist-list").innerHTML = '<div class="spinner"></div>';
+    try { rows = await api("/api/driver/waybills"); dcache.waybills = rows; }
+    catch (e) { $("hist-list").innerHTML = `<div class="empty">${esc(e.message)}</div>`; return; }
+  }
+  historyRows = rows;
     if (!rows.length) { $("hist-list").innerHTML = '<div class="empty">Путёвок пока нет</div>'; return; }
     $("hist-list").innerHTML = rows.map(r => `
       <div class="hist">
@@ -481,7 +495,6 @@ async function loadHistory() {
     $("hist-list").querySelectorAll("[data-edit]").forEach(b =>
       b.addEventListener("click", () =>
         openForm(historyRows.find(x => String(x.id) === b.dataset.edit))));
-  } catch (e) { $("hist-list").innerHTML = `<div class="empty">${esc(e.message)}</div>`; }
 }
 
 /* ---------- Моя машина / Профиль ---------- */
@@ -489,9 +502,14 @@ function vehRow(label, value, cls) {
   return `<div class="row"><span class="l">${label}</span><span class="v ${cls || ""}">${esc(value || "—")}</span></div>`;
 }
 async function loadVehicle() {
-  show("scr-vehicle"); $("veh-body").innerHTML = '<div class="spinner"></div>';
+  show("scr-vehicle");
+  let v = dcache.vehicle;
+  if (!v) {
+    $("veh-body").innerHTML = '<div class="spinner"></div>';
+    try { v = await api("/api/driver/vehicle"); dcache.vehicle = v; }
+    catch (e) { $("veh-body").innerHTML = `<div class="empty">${esc(e.message)}</div>`; return; }
+  }
   try {
-    const v = await api("/api/driver/vehicle");
     $("veh-body").innerHTML = `
       <div class="card vehicle">
         <div class="plate">${esc(v.plate)}</div>
@@ -522,11 +540,19 @@ async function loadVehicle() {
   } catch (e) { $("veh-body").innerHTML = `<div class="empty">${esc(e.message)}</div>`; }
 }
 async function loadProfile() {
-  show("scr-profile"); $("prof-body").innerHTML = '<div class="spinner"></div>';
+  show("scr-profile");
+  let p = dcache.profile, rows = dcache.waybills;
+  if (!p || !rows) {
+    $("prof-body").innerHTML = '<div class="spinner"></div>';
+    try {
+      [p, rows] = await Promise.all([
+        api("/api/driver/profile"), api("/api/driver/waybills"),
+      ]);
+      dcache.profile = p; dcache.waybills = rows;
+    }
+    catch (e) { $("prof-body").innerHTML = `<div class="empty">${esc(e.message)}</div>`; return; }
+  }
   try {
-    const [p, rows] = await Promise.all([
-      api("/api/driver/profile"), api("/api/driver/waybills"),
-    ]);
     $("prof-body").innerHTML = `
       <div class="card">
         ${vehRow("ФИО", p.full_name)}
@@ -572,6 +598,7 @@ $("btn-check").addEventListener("click", async () => {
     const data = await api("/api/waybill/save", { method: "POST", body: JSON.stringify(payload) });
     buzz("success");
     lastSaved = Object.assign({}, payload, { id: data.id });
+    dcache.waybills = null; dcache.profile = null;   // история обновится
     renderResult(data.result, payload.waybill_no, data.is_corrected);
     show("scr-result");
   } catch (e) {
