@@ -104,6 +104,10 @@
   .btn.ghost { background: transparent; color: var(--accent); border: 1.5px solid var(--accent); }
   .btn + .btn { margin-top: 10px; }
 
+  .chips { display: flex; gap: 8px; overflow-x: auto; margin-bottom: 14px; padding-bottom: 2px; }
+  .chip { flex: 0 0 auto; padding: 8px 14px; border-radius: 999px; border: 1.5px solid var(--border);
+          background: transparent; color: var(--hint); font-size: 13px; font-weight: 600; cursor: pointer; }
+  .chip.active { background: var(--accent); color: var(--accent-text); border-color: var(--accent); }
   .act { padding: 12px 14px; border-bottom: 1px solid var(--border); font-size: 13px; }
   .act:last-child { border-bottom: none; }
   .act .a { display: flex; justify-content: space-between; gap: 10px; }
@@ -192,6 +196,7 @@ window.addEventListener("unhandledrejection", function (ev) {
   <div class="screen" id="scr-report">
     <div class="topbar"><button class="link" data-back>← Меню</button><h2 style="margin:0">Отчёт</h2></div>
     <select id="sel-report"></select>
+    <button class="btn primary" id="wb-add" style="margin-bottom:12px">➕ Добавить путевой</button>
     <div id="report-body"><div class="spin"></div></div>
   </div>
 
@@ -205,6 +210,7 @@ window.addEventListener("unhandledrejection", function (ev) {
   <!-- Активность -->
   <div class="screen" id="scr-activity">
     <div class="topbar"><button class="link" data-back>← Меню</button><h2 style="margin:0">Активность</h2></div>
+    <div class="chips" id="act-filter"></div>
     <div id="activity-body"><div class="spin"></div></div>
   </div>
 
@@ -246,7 +252,21 @@ window.addEventListener("unhandledrejection", function (ev) {
     <div class="topbar"><button class="link" data-backto="scr-report">← Назад</button><span id="wb-title" style="font-weight:700"></span></div>
     <div class="card" style="padding:16px"><div class="grid2" id="wb-form"></div></div>
     <button class="btn primary" id="wb-save">Проверить и сохранить</button>
+    <button class="btn ghost" id="wb-delete" style="margin-top:10px;color:var(--bad);border-color:var(--bad);display:none">Удалить путевой</button>
     <button class="btn ghost" id="wb-cancel" style="margin-top:10px">Отмена</button>
+  </div>
+
+  <!-- Новый путевой: ввод ГРЗ -->
+  <div class="screen" id="scr-add-wb">
+    <div class="topbar"><button class="link" data-backto="scr-report">← Отчёт</button><h2 style="margin:0">Новый путевой</h2></div>
+    <div class="card" style="padding:16px">
+      <div class="field">
+        <label>ГРЗ машины (4 цифры)</label>
+        <input id="add-plate" inputmode="numeric" placeholder="напр. 9857" />
+      </div>
+      <p class="sub" style="margin:0">Путевой добавится в тот отчёт, в который попадает дата.</p>
+    </div>
+    <button class="btn primary" id="add-next">Далее</button>
   </div>
 
 </div>
@@ -327,8 +347,12 @@ async function login() {
   } catch (e) { $("err").textContent = e.message; pin = ""; renderDots(); }
 }
 on("logout", "click", async () => {
+  const b = $("logout");
+  if (b.disabled) return;
+  b.disabled = true; b.textContent = "Выходим…";
   try { await api("/api/logout", { method: "POST" }); } catch (e) {}
-  window.location.href = "/";
+  toast("Вы вышли");
+  setTimeout(() => { window.location.href = "/"; }, 700);
 });
 
 /* ---------- Загрузка всех данных сразу ---------- */
@@ -382,7 +406,7 @@ document.querySelectorAll("[data-backto]").forEach(b => b.addEventListener("clic
 function renderScreen(id) {
   if (id === "scr-report") return renderReport();
   if (id === "scr-summary") return renderSummary();
-  if (id === "scr-activity") return renderActivity();
+  if (id === "scr-activity") { renderActFilter(); return renderActivity(); }
   if (id === "scr-vehicles") return renderVehicles($("vehicles-body"), "full");
   if (id === "scr-norms") return renderVehicles($("norms-body"), "norms");
   if (id === "scr-drivers") return renderDrivers();
@@ -434,7 +458,10 @@ function renderReport() {
               <span>Моточасы: <b>${nf(it.motohours)}</b></span>
             </div>
             ${it.author ? `<div class="meta" style="margin-top:6px">Внёс: ${esc(it.author)}</div>` : ""}
-            <button class="link" data-wb="${it.id}" style="padding:8px 0 0">✏️ Изменить</button>
+            <div style="display:flex;gap:8px;padding-top:8px;flex-wrap:wrap">
+              <button class="link" data-wb="${it.id}" style="padding:0">✏️ Изменить</button>
+              <button class="link" data-del="${it.id}" style="padding:0;color:var(--bad)">🗑 Удалить</button>
+            </div>
           </div>`).join("")}</div>
       </div>`).join("");
   bindToggles(box);
@@ -443,6 +470,34 @@ function renderReport() {
     const item = findReportItem(b.dataset.wb);
     if (item) openWaybillForm(item);
   }));
+  box.querySelectorAll("[data-del]").forEach(b => b.addEventListener("click", (e) => {
+    e.stopPropagation();
+    const item = findReportItem(b.dataset.del);
+    if (!item) return;
+    armConfirm(b, "Точно удалить?", async () => {
+      try {
+        await api("/api/waybill/" + item.id, { method: "DELETE" });
+        toast("Путевой удалён");
+        await refreshAll();
+        renderReport();
+      } catch (err) { toast(err.message); }
+    });
+  }));
+}
+
+/* Двухшаговое подтверждение без системных диалогов */
+function armConfirm(btn, label, fn) {
+  if (btn.dataset.armed === "1") {
+    btn.dataset.armed = "";
+    fn();
+    return;
+  }
+  btn.dataset.armed = "1";
+  const old = btn.textContent;
+  btn.textContent = label;
+  setTimeout(() => {
+    if (btn.dataset.armed === "1") { btn.dataset.armed = ""; btn.textContent = old; }
+  }, 3500);
 }
 
 function findReportItem(id) {
@@ -514,15 +569,39 @@ function bindToggles(box) {
 /* ---------- Активность ---------- */
 const ACTIONS = {
   driver_login: "Вход водителя", admin_login: "Вход администратора", logout: "Выход",
-  create_waybill: "Создан путевой", update_waybill: "Изменён путевой",
+  create_waybill: "Добавлен путевой", update_waybill: "Исправлен путевой",
+  delete_waybill: "Удалён путевой",
   create_vehicle: "Добавлена машина", update_vehicle: "Изменена машина",
 };
+const ACT_GROUPS = {
+  auth: ["driver_login", "admin_login", "logout"],
+  waybill: ["create_waybill", "update_waybill", "delete_waybill"],
+  vehicle: ["create_vehicle", "update_vehicle"],
+};
+const ACT_FILTERS = [["all", "Все"], ["auth", "Вход"], ["waybill", "Путевые"], ["vehicle", "Машины"]];
+let actFilter = "all";
+
+function actGroup(action) {
+  for (const g of Object.keys(ACT_GROUPS)) if (ACT_GROUPS[g].includes(action)) return g;
+  return "other";
+}
+function renderActFilter() {
+  $("act-filter").innerHTML = ACT_FILTERS.map(([k, t]) =>
+    `<button class="chip ${actFilter === k ? "active" : ""}" data-f="${k}">${t}</button>`).join("");
+  $("act-filter").querySelectorAll("[data-f]").forEach(b => b.addEventListener("click", () => {
+    actFilter = b.dataset.f; renderActFilter(); renderActivity();
+  }));
+}
 function renderActivity() {
   const box = $("activity-body");
-  const rows = cache.activity;
-  if (!rows) { box.innerHTML = '<div class="spin"></div>'; return; }
-  if (rows.error) { box.innerHTML = `<div class="empty">${esc(rows.error)}</div>`; return; }
-  if (!rows.length) { box.innerHTML = '<div class="empty">Активности пока нет</div>'; return; }
+  const all = cache.activity;
+  if (!all) { box.innerHTML = '<div class="spin"></div>'; return; }
+  if (all.error) { box.innerHTML = `<div class="empty">${esc(all.error)}</div>`; return; }
+  const rows = actFilter === "all" ? all : all.filter(r => actGroup(r.action) === actFilter);
+  if (!rows.length) {
+    box.innerHTML = '<div class="empty">Здесь пока пусто. Активность появится, когда начнут работать с путевыми.</div>';
+    return;
+  }
   box.innerHTML = `<div class="card">` + rows.map(r => `
     <div class="act">
       <div class="a"><b>${esc(ACTIONS[r.action] || r.action)}</b>
@@ -690,19 +769,64 @@ const WB_FIELDS = [
   ["fuel_spent", "Затрачено топлива, л", "decimal"],
   ["motohours", "Моточасы", "decimal"],
 ];
-function openWaybillForm(it) {
-  if (!it) return;
-  editingWb = it;
-  $("wb-title").textContent = `№${it.waybill_no} · ${it.plate}`;
+function renderWaybillForm() {
+  const it = editingWb || {};
+  $("wb-title").textContent = it.id
+    ? `№${it.waybill_no} · ${it.plate}`
+    : `Новый · ${it.plate || ""}`;
   $("wb-form").innerHTML = WB_FIELDS.map(([k, label, type]) => {
     let val = it[k] != null ? it[k] : "";
     if (type === "date" && val) val = String(val).slice(0, 10);
     const im = type === "date" ? "" : (type === "decimal" ? 'inputmode="decimal"' : "");
     return `<div class="field"><label>${label}</label><input id="wbf-${k}" type="${type === "date" ? "date" : "text"}" ${im} value="${esc(val)}" /></div>`;
   }).join("");
+  $("wb-delete").style.display = it.id ? "" : "none";
   show("scr-waybill");
 }
+
+function openWaybillForm(it) {
+  if (!it) return;
+  editingWb = Object.assign({}, it);
+  renderWaybillForm();
+}
+
+async function openWaybillCreate(plate) {
+  editingWb = {
+    id: null, plate: plate, waybill_no: "",
+    waybill_date: new Date().toISOString().slice(0, 10),
+  };
+  renderWaybillForm();
+  try {
+    const st = await api("/api/last-state?plate=" + encodeURIComponent(plate));
+    if (st.last) {
+      editingWb.km_start = st.last.km_end;
+      editingWb.tank_start = st.last.tank_end;
+      if ($("wbf-km_start")) $("wbf-km_start").value = st.last.km_end;
+      if ($("wbf-tank_start")) $("wbf-tank_start").value = st.last.tank_end;
+      toast(`Начальные данные — из путевого №${st.last.waybill_no}`);
+    }
+  } catch (e) { /* заполнят вручную */ }
+}
 on("wb-cancel", "click", () => { show("scr-report"); renderReport(); });
+on("wb-delete", "click", (e) => {
+  if (!editingWb || !editingWb.id) return;
+  armConfirm(e.target, "Точно удалить?", async () => {
+    try {
+      await api("/api/waybill/" + editingWb.id, { method: "DELETE" });
+      toast("Путевой удалён");
+      await refreshAll();
+      show("scr-report"); renderReport();
+    } catch (err) { toast(err.message); }
+  });
+});
+on("wb-add", "click", () => { $("add-plate").value = ""; show("scr-add-wb"); });
+on("add-next", "click", () => {
+  const plate = ($("add-plate").value || "").trim();
+  if (!/^\d{4}$/.test(plate)) return toast("ГРЗ — ровно 4 цифры");
+  const v = (cache.vehicles || []).find(x => String(x.plate) === plate);
+  if (!v) return toast("Машина с ГРЗ " + plate + " не найдена");
+  openWaybillCreate(plate);
+});
 on("wb-save", "click", async () => {
   const b = $("wb-save");
   const body = {

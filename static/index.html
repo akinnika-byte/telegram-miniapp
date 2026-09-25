@@ -101,6 +101,7 @@
 
   .notice { border-radius: 16px; padding: 14px 16px; margin-bottom: 14px; font-size: 14px; line-height: 1.45; }
   .notice.warn { background: var(--bad-bg); color: var(--bad); }
+  .notice.ok { background: var(--ok-bg); color: var(--ok); }
 
   .row { display: flex; justify-content: space-between; gap: 12px; padding: 10px 0; font-size: 15px; }
   .row + .row { border-top: 1px solid var(--border); }
@@ -310,6 +311,7 @@ window.addEventListener("unhandledrejection", function (ev) {
 <div class="screen" id="scr-form">
   <div class="topbar"><button class="link" id="form-back">← Меню</button><span></span></div>
   <h2 id="form-title">Новый путевой</h2>
+  <div id="form-continuity" class="notice ok" style="display:none"></div>
   <div class="card vehicle">
     <div class="plate" id="v-plate">—</div>
     <div class="meta">
@@ -432,6 +434,8 @@ async function loadSession() {
 /* ---------- Вход ---------- */
 function openLock() {
   pin = ""; $("pin-error").textContent = ""; renderDots();
+  const b = $("logout");
+  if (b) { b.disabled = false; b.textContent = "Выйти"; }
   show("scr-lock");
 }
 function renderDots() { $("dots").querySelectorAll(".dot").forEach((d, i) => d.classList.toggle("filled", i < pin.length)); }
@@ -451,7 +455,7 @@ async function submitPin() {
   }, 7000);
   try {
     const data = await api("/api/login", { method: "POST", body: JSON.stringify({ code }) });
-    if (data.kind === "admin") { window.location.href = "/admin?v=4#just"; return; }
+    if (data.kind === "admin") { window.location.href = "/admin?v=5#just"; return; }
     vehicle = data.vehicle;
     buzz("success");
     openMenu();
@@ -466,8 +470,13 @@ async function submitPin() {
   }
 }
 $("logout").addEventListener("click", async () => {
+  const b = $("logout");
+  if (b.disabled) return;
+  b.disabled = true; b.textContent = "Выходим…";
   try { await api("/api/logout", { method: "POST" }); } catch (e) {}
-  openLock();
+  buzz("success");
+  toast("Вы вышли. Введите код, чтобы войти снова.");
+  setTimeout(() => { b.disabled = false; b.textContent = "Выйти"; openLock(); }, 700);
 });
 
 /* ---------- Меню ---------- */
@@ -486,7 +495,7 @@ function openMenu() {
 }
 $("m-new").addEventListener("click", () => openForm(null));
 
-function openForm(rec, opts = {}) {
+async function openForm(rec, opts = {}) {
   editingId = rec ? rec.id : null;
   fixMode = !!opts.fix;
   $("form-title").textContent = rec ? `Исправление путевого №${rec.waybill_no}` : "Новый путевой";
@@ -501,7 +510,25 @@ function openForm(rec, opts = {}) {
     ? String(rec.waybill_date).slice(0, 10)
     : new Date().toISOString().slice(0, 10);
   FIELD_IDS.forEach(f => $("f-" + f).value = rec && rec[f] != null ? rec[f] : "");
+  $("form-continuity").style.display = "none";
   show("scr-form");
+
+  // Новый путевой продолжает предыдущий: подставляем километраж и бак
+  if (!rec) {
+    try {
+      const st = await api("/api/last-state?plate=" + encodeURIComponent(vehicle.plate));
+      const last = st.last;
+      if (last) {
+        $("f-km_start").value = last.km_end != null ? last.km_end : "";
+        $("f-tank_start").value = last.tank_end != null ? last.tank_end : "";
+        const box = $("form-continuity");
+        box.textContent = `Начальные данные — из путевого №${last.waybill_no}`
+          + ` (${dstr(last.waybill_date)}): пробег ${nf(last.km_end)} км, бак ${nf(last.tank_end)} л.`;
+        box.style.display = "";
+        if (tg && tg.HapticFeedback) tg.HapticFeedback.impactOccurred("light");
+      }
+    } catch (e) { /* подставим вручную */ }
+  }
 }
 $("m-history").addEventListener("click", loadHistory);
 $("m-vehicle").addEventListener("click", loadVehicle);
@@ -533,7 +560,7 @@ async function loadHistory() {
     catch (e) { $("hist-list").innerHTML = `<div class="empty">${esc(e.message)}</div>`; return; }
   }
   historyRows = rows;
-    if (!rows.length) { $("hist-list").innerHTML = '<div class="empty">Путёвок пока нет</div>'; return; }
+    if (!rows.length) { $("hist-list").innerHTML = '<div class="empty">Путёвок пока нет. Нажмите «Новый путевой», чтобы внести первый.</div>'; return; }
     $("hist-list").innerHTML = rows.map(r => `
       <div class="hist">
         <div class="h"><b>Путевой №${esc(r.waybill_no)}</b>
