@@ -274,12 +274,23 @@ window.addEventListener("unhandledrejection", function (ev) {
 
 <script>
 const tg = window.Telegram && window.Telegram.WebApp ? window.Telegram.WebApp : null;
+const IN_TELEGRAM = !!(tg && tg.initData);
 let session = null, periods = [], currentPeriod = null, pin = "";
 let cache = {}, lastSig = null, editingWb = null;
 const openCards = new Set();
 
+const TOKEN_KEY = "avtr_web_token";
+const getToken = () => { try { return localStorage.getItem(TOKEN_KEY) || ""; } catch (e) { return ""; } };
+const setToken = (t) => { try { t ? localStorage.setItem(TOKEN_KEY, t) : localStorage.removeItem(TOKEN_KEY); } catch (e) {} };
+
 const $ = (id) => document.getElementById(id);
 const on = (id, evt, fn) => { const el = $(id); if (el) el.addEventListener(evt, fn); };
+const apiHeaders = () => {
+  const h = { "Content-Type": "application/json" };
+  if (IN_TELEGRAM) h["X-Telegram-Init-Data"] = tg.initData;
+  else { const t = getToken(); if (t) h["Authorization"] = "Bearer " + t; }
+  return h;
+};
 const api = async (path, opts = {}) => {
   opts = opts || {};
   let ctrl = null, timer = null;
@@ -290,10 +301,7 @@ const api = async (path, opts = {}) => {
   try {
     const res = await fetch(path, Object.assign({}, opts, {
       signal: ctrl ? ctrl.signal : undefined,
-      headers: Object.assign({
-        "Content-Type": "application/json",
-        "X-Telegram-Init-Data": tg ? tg.initData : "",
-      }, opts.headers || {}),
+      headers: Object.assign(apiHeaders(), opts.headers || {}),
     }));
     const data = await res.json().catch(() => ({}));
     if (!res.ok) throw new Error(data.detail || "Ошибка сервера");
@@ -315,17 +323,27 @@ const toast = (m) => { const t = $("toast"); t.textContent = m; t.classList.add(
 
 /* ---------- Запуск: всегда вход ---------- */
 async function boot() {
-  if (!tg || !tg.initData) {
-    document.body.innerHTML = "<div class='wrap'><h1>Откройте через Telegram</h1><p class='sub'>Панель доступна только внутри мини-приложения.</p></div>";
+  if (IN_TELEGRAM) {
+    tg.ready();
+    if (location.hash === "#just") {
+      try { history.replaceState(null, "", location.pathname); } catch (e) {}
+      try {
+        session = await api("/api/session", { method: "POST" });
+        if (session && session.is_admin) { await startPanel(); return; }
+      } catch (e) {}
+    }
+    show("scr-login");
     return;
   }
-  tg.ready();
-  if (location.hash === "#just") {
-    try { history.replaceState(null, "", location.pathname); } catch (e) {}
+  // Обычный браузер
+  if (getToken()) {
     try {
       session = await api("/api/session", { method: "POST" });
       if (session && session.is_admin) { await startPanel(); return; }
-    } catch (e) {}
+      setToken("");
+      window.location.href = "/";
+      return;
+    } catch (e) { setToken(""); }
   }
   show("scr-login");
 }
@@ -340,7 +358,13 @@ on("keypad", "click", (e) => {
 });
 async function login() {
   try {
-    const data = await api("/api/login", { method: "POST", body: JSON.stringify({ code: pin }) });
+    let data;
+    if (IN_TELEGRAM) {
+      data = await api("/api/login", { method: "POST", body: JSON.stringify({ code: pin }) });
+    } else {
+      data = await api("/api/web/login", { method: "POST", body: JSON.stringify({ code: pin }) });
+      if (data.token) setToken(data.token);
+    }
     if (data.kind === "driver") { window.location.href = "/"; return; }
     session = await api("/api/session", { method: "POST" });
     await startPanel();
@@ -350,7 +374,10 @@ on("logout", "click", async () => {
   const b = $("logout");
   if (b.disabled) return;
   b.disabled = true; b.textContent = "Выходим…";
-  try { await api("/api/logout", { method: "POST" }); } catch (e) {}
+  try {
+    if (IN_TELEGRAM) { await api("/api/logout", { method: "POST" }); }
+    else { await api("/api/web/logout", { method: "POST" }); setToken(""); }
+  } catch (e) { if (!IN_TELEGRAM) setToken(""); }
   toast("Вы вышли");
   setTimeout(() => { window.location.href = "/"; }, 700);
 });

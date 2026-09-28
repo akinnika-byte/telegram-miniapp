@@ -61,6 +61,19 @@ create table if not exists app_users (
     last_seen_at  timestamptz not null default now()
 );
 
+-- ---------- Сессии для входа через обычный браузер ----------
+create table if not exists web_sessions (
+    id            bigserial primary key,
+    token_hash    text not null unique,                     -- sha256 от токена, сам токен не храним
+    role          text not null,                            -- driver | owner | commander | technician
+    vehicle_plate text,
+    display_name  text,
+    created_at    timestamptz not null default now(),
+    last_seen_at  timestamptz not null default now(),
+    expires_at    timestamptz
+);
+create index if not exists idx_web_sessions_hash on web_sessions(token_hash);
+
 -- ---------- Коды доступа админов (3 роли) ----------
 -- Коды хранятся в виде хеша, в открытом виде нигде нет.
 create table if not exists access_codes (

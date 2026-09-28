@@ -372,9 +372,20 @@ window.addEventListener("unhandledrejection", function (ev) {
 
 <script>
 const tg = window.Telegram && window.Telegram.WebApp ? window.Telegram.WebApp : null;
+const IN_TELEGRAM = !!(tg && tg.initData);
 let session = null, vehicle = null, pin = "", editingId = null, fixMode = false, lastSaved = null;
 
+const TOKEN_KEY = "avtr_web_token";
+const getToken = () => { try { return localStorage.getItem(TOKEN_KEY) || ""; } catch (e) { return ""; } };
+const setToken = (t) => { try { t ? localStorage.setItem(TOKEN_KEY, t) : localStorage.removeItem(TOKEN_KEY); } catch (e) {} };
+
 const $ = (id) => document.getElementById(id);
+const apiHeaders = () => {
+  const h = { "Content-Type": "application/json" };
+  if (IN_TELEGRAM) h["X-Telegram-Init-Data"] = tg.initData;
+  else { const t = getToken(); if (t) h["Authorization"] = "Bearer " + t; }
+  return h;
+};
 const api = async (path, opts = {}) => {
   opts = opts || {};
   let ctrl = null, timer = null;
@@ -385,10 +396,7 @@ const api = async (path, opts = {}) => {
   try {
     const res = await fetch(path, Object.assign({}, opts, {
       signal: ctrl ? ctrl.signal : undefined,
-      headers: Object.assign({
-        "Content-Type": "application/json",
-        "X-Telegram-Init-Data": tg ? tg.initData : "",
-      }, opts.headers || {}),
+      headers: Object.assign(apiHeaders(), opts.headers || {}),
     }));
     const data = await res.json().catch(() => ({}));
     if (!res.ok) throw new Error(data.detail || "Ошибка сервера");
@@ -421,14 +429,33 @@ function expiryClass(iso) {
 
 /* ---------- Инициализация ---------- */
 async function boot() {
-  if (!tg || !tg.initData) { show("scr-outside"); return; }
-  tg.ready();
-  await loadSession();
+  if (IN_TELEGRAM) {
+    tg.ready();
+    await loadSession();
+    return;
+  }
+  // Обычный браузер: если есть сохранённая сессия — восстанавливаем
+  if (getToken()) { await restoreWeb(); return; }
+  openLock();
 }
 async function loadSession() {
   try { session = await api("/api/session", { method: "POST" }); }
   catch (e) { $("err-text").textContent = e.message; show("scr-error"); return; }
-  openLock();   // код вводится при каждом открытии
+  openLock();   // в Telegram код вводится при каждом открытии
+}
+async function restoreWeb() {
+  try { session = await api("/api/session", { method: "POST" }); }
+  catch (e) { setToken(""); openLock(); return; }
+  if (session.is_admin) { window.location.href = "/admin"; return; }
+  if (session.vehicle_plate) {
+    try {
+      vehicle = await api("/api/driver/vehicle");
+      openMenu();
+      prefetchDriver();
+      return;
+    } catch (e) { /* ниже — экран входа */ }
+  }
+  openLock();
 }
 
 /* ---------- Вход ---------- */
@@ -454,13 +481,23 @@ async function submitPin() {
     $("checking-hint").textContent = "Сервер просыпается… Обычно это 30–40 секунд";
   }, 7000);
   try {
-    const data = await api("/api/login", { method: "POST", body: JSON.stringify({ code }) });
-    if (data.kind === "admin") { window.location.href = "/admin?v=5#just"; return; }
+    let data;
+    if (IN_TELEGRAM) {
+      data = await api("/api/login", { method: "POST", body: JSON.stringify({ code }) });
+    } else {
+      data = await api("/api/web/login", { method: "POST", body: JSON.stringify({ code }) });
+      if (data.token) setToken(data.token);
+    }
+    if (data.kind === "admin") {
+      window.location.href = IN_TELEGRAM ? "/admin?v=5#just" : "/admin";
+      return;
+    }
     vehicle = data.vehicle;
     buzz("success");
     openMenu();
     prefetchDriver();
   } catch (e) {
+    if (!IN_TELEGRAM) setToken("");
     buzz("error");
     show("scr-lock");
     $("pin-error").textContent = e.message;
@@ -473,7 +510,10 @@ $("logout").addEventListener("click", async () => {
   const b = $("logout");
   if (b.disabled) return;
   b.disabled = true; b.textContent = "Выходим…";
-  try { await api("/api/logout", { method: "POST" }); } catch (e) {}
+  try {
+    if (IN_TELEGRAM) { await api("/api/logout", { method: "POST" }); }
+    else { await api("/api/web/logout", { method: "POST" }); setToken(""); }
+  } catch (e) { if (!IN_TELEGRAM) setToken(""); }
   buzz("success");
   toast("Вы вышли. Введите код, чтобы войти снова.");
   setTimeout(() => { b.disabled = false; b.textContent = "Выйти"; openLock(); }, 700);

@@ -58,6 +58,13 @@ tank_end_calc  = tank_start + fuel_in - P
 - `db-admin` — сабагент для диагностики базы (права: только sqlproxy).
 - GitHub — через `gh` CLI или REST API с токеном (переменная `GITHUB_PERSONAL_ACCESS_TOKEN`); удалённый GitHub MCP требует тарифа Copilot и у этого аккаунта отдаёт 403.
 
+## Доступ с обычного сайта (веб-сессии)
+Приложение открывается по прямой ссылке и из обычного браузера (не только в Telegram), база общая.
+- Вход: `POST /api/web/login {code}` → возвращает токен; на клиенте хранится в `localStorage` под ключом `avtr_web_token`.
+- Токен передаётся заголовком `Authorization: Bearer <token>`. Таблица `web_sessions` хранит **sha256** токена, срок 30 дней.
+- `current_user` принимает либо `X-Telegram-Init-Data`, либо Bearer-токен.
+- Вход защищён от перебора: не более 20 неудачных попыток за 10 минут с одного IP.
+
 ## Процедура деплоя
 1. `git push origin main` → Render передеплоивает сам (~1–2 мин).
 2. Проверка: `GET https://telegram-miniapp-emy5.onrender.com/api/health` → `db_ok: true`.

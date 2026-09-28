@@ -10,6 +10,8 @@ Backend на FastAPI:
 
 from __future__ import annotations
 
+import hashlib
+import secrets
 import time
 from collections import deque
 from datetime import date, datetime, timezone
@@ -141,6 +143,11 @@ class SqlIn(BaseModel):
     sql: str
 
 
+class WebLoginIn(BaseModel):
+    """Вход через обычный браузер (без Telegram)."""
+    code: str
+
+
 # ============================================================
 #   Служебные функции
 # ============================================================
@@ -192,36 +199,69 @@ def log_action(conn, user: dict, action: str, entity: str | None = None,
     )
 
 
-def current_user(
-    x_telegram_init_data: str = Header(default="", alias="X-Telegram-Init-Data"),
-) -> dict:
-    """Проверяет initData и возвращает (создаёт) пользователя из app_users."""
-    try:
-        data = validate_init_data(x_telegram_init_data, BOT_TOKEN, INIT_DATA_MAX_AGE)
-    except InitDataError as exc:
-        raise HTTPException(status_code=401, detail=str(exc)) from exc
-
-    tg_user = data.get("user") or {}
-    tg_id = tg_user.get("id")
-    if not tg_id:
-        raise HTTPException(status_code=401, detail="в initData нет пользователя")
-
+def _web_user(token: str) -> dict:
+    """Пользователь по веб-токену (вход через обычный браузер)."""
+    token_hash = hashlib.sha256(token.encode("utf-8")).hexdigest()
     with db() as conn:
         row = conn.execute(
-            """
-            insert into app_users (telegram_id, username, first_name, last_name)
-            values (%s, %s, %s, %s)
-            on conflict (telegram_id) do update set
-                username    = excluded.username,
-                first_name  = excluded.first_name,
-                last_name   = excluded.last_name,
-                last_seen_at = now()
-            returning *
-            """,
-            (tg_id, tg_user.get("username"), tg_user.get("first_name"),
-             tg_user.get("last_name")),
+            "select id, role, vehicle_plate, display_name, expires_at "
+            "from web_sessions where token_hash = %s",
+            (token_hash,),
         ).fetchone()
-    return row
+        if not row:
+            raise HTTPException(status_code=401, detail="Сессия не найдена. Войдите заново.")
+        if row["expires_at"] and row["expires_at"] < datetime.now(timezone.utc):
+            conn.execute("delete from web_sessions where id = %s", (row["id"],))
+            raise HTTPException(status_code=401, detail="Сессия истекла. Войдите заново.")
+        conn.execute("update web_sessions set last_seen_at = now() where id = %s",
+                     (row["id"],))
+    return {
+        "telegram_id": None,
+        "role": row["role"],
+        "vehicle_plate": row["vehicle_plate"],
+        "first_name": row["display_name"],
+        "last_name": None,
+        "username": None,
+        "web_session_id": row["id"],
+    }
+
+
+def current_user(
+    x_telegram_init_data: str = Header(default="", alias="X-Telegram-Init-Data"),
+    authorization: str = Header(default=""),
+) -> dict:
+    """Кто я: либо Telegram initData, либо веб-токен из браузера."""
+    if x_telegram_init_data:
+        try:
+            data = validate_init_data(x_telegram_init_data, BOT_TOKEN, INIT_DATA_MAX_AGE)
+        except InitDataError as exc:
+            raise HTTPException(status_code=401, detail=str(exc)) from exc
+
+        tg_user = data.get("user") or {}
+        tg_id = tg_user.get("id")
+        if not tg_id:
+            raise HTTPException(status_code=401, detail="в initData нет пользователя")
+
+        with db() as conn:
+            return conn.execute(
+                """
+                insert into app_users (telegram_id, username, first_name, last_name)
+                values (%s, %s, %s, %s)
+                on conflict (telegram_id) do update set
+                    username    = excluded.username,
+                    first_name  = excluded.first_name,
+                    last_name   = excluded.last_name,
+                    last_seen_at = now()
+                returning *
+                """,
+                (tg_id, tg_user.get("username"), tg_user.get("first_name"),
+                 tg_user.get("last_name")),
+            ).fetchone()
+
+    if authorization.lower().startswith("bearer "):
+        return _web_user(authorization[7:].strip())
+
+    raise HTTPException(status_code=401, detail="Требуется вход в приложение")
 
 
 def require_admin(user: dict = Depends(current_user)) -> dict:
@@ -259,6 +299,25 @@ def parse_optional_date(value: Optional[str]) -> Optional[date]:
         return datetime.strptime(value[:10], "%Y-%m-%d").date()
     except (ValueError, TypeError):
         raise HTTPException(status_code=400, detail="Неверный формат даты")
+
+
+# --- Простая защита от перебора кодов (в памяти процесса) ---
+_login_fails: dict[str, list[float]] = {}
+
+
+def _check_login_rate(ip: str) -> None:
+    now = time.time()
+    attempts = [t for t in _login_fails.get(ip, []) if now - t < 600]
+    _login_fails[ip] = attempts
+    if len(attempts) >= 20:
+        raise HTTPException(
+            status_code=429,
+            detail="Слишком много попыток входа. Подождите 10 минут.",
+        )
+
+
+def _note_login_fail(ip: str) -> None:
+    _login_fails.setdefault(ip, []).append(time.time())
 
 
 def period_sig(conn, period_id: int) -> str:
@@ -378,6 +437,76 @@ def login(payload: CodeIn, user: dict = Depends(current_user)) -> dict:
         status_code=404,
         detail="Код не распознан. Проверьте ГРЗ машины или код доступа.",
     )
+
+
+@app.post("/api/web/login")
+def web_login(payload: WebLoginIn, request: Request) -> dict:
+    """Вход через обычный браузер: код = ГРЗ машины или код доступа админа."""
+    ip = request.client.host if request.client else "unknown"
+    _check_login_rate(ip)
+
+    code = (payload.code or "").strip()
+    if not code.isdigit() or len(code) != 4:
+        raise HTTPException(status_code=400, detail="Код — ровно 4 цифры")
+
+    token = secrets.token_urlsafe(32)
+    token_hash = hashlib.sha256(token.encode("utf-8")).hexdigest()
+    vehicle = None
+
+    with db() as conn:
+        vehicle = conn.execute(
+            "select * from vehicles where plate = %s and is_active", (code,)
+        ).fetchone()
+        if vehicle:
+            role, plate = "driver", vehicle["plate"]
+            user = {"telegram_id": None, "role": role, "vehicle_plate": plate}
+            display = actor_display(conn, user, plate)
+        else:
+            admin = conn.execute(
+                "select role from access_codes "
+                "where code_hash = crypt(%s, code_hash)",
+                (code,),
+            ).fetchone()
+            if not admin:
+                _note_login_fail(ip)
+                raise HTTPException(
+                    status_code=404,
+                    detail="Код не распознан. Проверьте ГРЗ машины или код доступа.",
+                )
+            role, plate = admin["role"], None
+            user = {"telegram_id": None, "role": role, "vehicle_plate": None}
+            display = actor_display(conn, user, None)
+
+        conn.execute(
+            "delete from web_sessions "
+            "where expires_at is not null and expires_at < now()"
+        )
+        conn.execute(
+            "insert into web_sessions "
+            "(token_hash, role, vehicle_plate, display_name, expires_at) "
+            "values (%s, %s, %s, %s, now() + interval '30 days')",
+            (token_hash, role, plate, display),
+        )
+        log_action(conn, user, "web_login", "web_session", None,
+                   {"role": role}, plate=plate)
+
+    return {
+        "token": token,
+        "kind": "driver" if role == "driver" else "admin",
+        "role": role,
+        "role_title": ADMIN_ROLE_TITLES.get(role),
+        "vehicle": vehicle,
+    }
+
+
+@app.post("/api/web/logout")
+def web_logout(user: dict = Depends(current_user)) -> dict:
+    """Выход из веб-сессии: токен удаляется."""
+    sid = user.get("web_session_id")
+    if sid:
+        with db() as conn:
+            conn.execute("delete from web_sessions where id = %s", (sid,))
+    return {"ok": True}
 
 
 # ============================================================
@@ -1101,6 +1230,13 @@ def admin_migrate(user: dict = Depends(require_admin)) -> dict:
         "create table if not exists request_log ("
         "id bigserial primary key, method text, path text, status int, "
         "duration_ms int, created_at timestamptz not null default now())",
+        "create table if not exists web_sessions ("
+        "id bigserial primary key, token_hash text not null unique, "
+        "role text not null, vehicle_plate text, display_name text, "
+        "created_at timestamptz not null default now(), "
+        "last_seen_at timestamptz not null default now(), expires_at timestamptz)",
+        "create index if not exists idx_web_sessions_hash "
+        "on web_sessions(token_hash)",
     ]
     with db() as conn:
         for sql in statements:
