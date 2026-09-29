@@ -125,6 +125,7 @@ class VehicleIn(BaseModel):
     fuel_norm: float = 0
     motohour_norm: float = 0
     tank_capacity: float = 0
+    fuel_type: str = "diesel"
     is_active: bool = True
     vin: Optional[str] = None
     engine_no: Optional[str] = None
@@ -561,12 +562,22 @@ def driver_profile(user: dict = Depends(current_user)) -> dict:
 
 @app.get("/api/driver/vehicle")
 def driver_vehicle(user: dict = Depends(current_user)) -> dict:
-    """Всё о машине водителя (в т.ч. VIN, двигатель, сроки документов)."""
+    """Всё о машине водителя + текущее состояние из последнего путевого."""
     plate = _driver_plate(user)
     with db() as conn:
         v = conn.execute("select * from vehicles where plate = %s", (plate,)).fetchone()
-    if not v:
-        raise HTTPException(status_code=404, detail="Машина не найдена")
+        if not v:
+            raise HTTPException(status_code=404, detail="Машина не найдена")
+        ls = conn.execute(
+            "select km_end, tank_end, waybill_no, waybill_date from waybills "
+            "where vehicle_id = %s "
+            "order by waybill_date desc nulls last, created_at desc limit 1",
+            (v["id"],),
+        ).fetchone()
+    v["last_km_end"] = (ls or {}).get("km_end")
+    v["last_tank_end"] = (ls or {}).get("tank_end")
+    v["last_waybill_no"] = (ls or {}).get("waybill_no")
+    v["last_waybill_date"] = (ls or {}).get("waybill_date")
     return v
 
 
@@ -875,9 +886,10 @@ def admin_report(period_id: int, user: dict = Depends(require_admin)) -> dict:
 
         records = conn.execute(
             """
-            select w.*, u.first_name, u.last_name, u.username
+            select w.*, u.first_name, u.last_name, u.username, v.fuel_type
             from waybills w
             left join app_users u on u.telegram_id = w.created_by_telegram_id
+            left join vehicles v on v.id = w.vehicle_id
             where w.period_id = %s
             order by w.plate, w.km_start
             """,
@@ -889,6 +901,7 @@ def admin_report(period_id: int, user: dict = Depends(require_admin)) -> dict:
     for r in records:
         g = groups.setdefault(r["plate"], {
             "plate": r["plate"], "model": r["model"],
+            "fuel_type": r.get("fuel_type") or "diesel",
             "tank_start": float(r["tank_start"]),
             "fuel_in": 0.0, "fuel_spent": 0.0, "tank_end": float(r["tank_end"]),
             "total_km": 0.0, "count": 0, "has_bad": False, "items": [],
@@ -927,11 +940,28 @@ def admin_report(period_id: int, user: dict = Depends(require_admin)) -> dict:
         digits = "".join(ch for ch in p if ch.isdigit())
         return (0, int(digits)) if digits else (1, p)
 
+    # Итоги по видам топлива: дизель и бензин (УАЗ/Патриот)
+    totals = {
+        "all": {"received": 0.0, "spent": 0.0, "calc": 0.0, "km": 0.0},
+        "diesel": {"received": 0.0, "spent": 0.0, "calc": 0.0, "km": 0.0},
+        "petrol": {"received": 0.0, "spent": 0.0, "calc": 0.0, "km": 0.0},
+    }
+    for r in records:
+        ft = r.get("fuel_type") or "diesel"
+        if ft not in ("diesel", "petrol"):
+            ft = "diesel"
+        for key in ("all", ft):
+            totals[key]["received"] += float(r["fuel_in"])
+            totals[key]["spent"] += float(r["fuel_spent"])
+            totals[key]["calc"] += float(r["fuel_calc"])
+            totals[key]["km"] += float(r["km_total_odo"])
+
     return {
         "period": period,
         "groups": [groups[p] for p in sorted(groups, key=sort_key)],
         "total_count": len(records),
         "total_bad": sum(1 for r in records if not r["is_ok"]),
+        "totals": totals,
         "sig": sig,
     }
 
@@ -1061,7 +1091,22 @@ def admin_activity(limit: int = 100, user: dict = Depends(require_admin)) -> lis
 def admin_vehicles(user: dict = Depends(require_admin)) -> list:
     with db() as conn:
         return conn.execute(
-            "select * from vehicles order by plate"
+            """
+            select v.*,
+                   ls.km_end       as last_km_end,
+                   ls.tank_end     as last_tank_end,
+                   ls.waybill_no   as last_waybill_no,
+                   ls.waybill_date as last_waybill_date
+            from vehicles v
+            left join lateral (
+                select km_end, tank_end, waybill_no, waybill_date
+                from waybills w
+                where w.vehicle_id = v.id
+                order by w.waybill_date desc nulls last, w.created_at desc
+                limit 1
+            ) ls on true
+            order by v.plate
+            """
         ).fetchall()
 
 
@@ -1087,6 +1132,7 @@ def admin_vehicle_save(payload: VehicleIn, user: dict = Depends(require_admin)) 
         "fuel_norm": payload.fuel_norm,
         "motohour_norm": payload.motohour_norm,
         "tank_capacity": payload.tank_capacity,
+        "fuel_type": (payload.fuel_type or "diesel"),
         "is_active": payload.is_active,
         "vin": payload.vin,
         "engine_no": payload.engine_no,
@@ -1108,6 +1154,7 @@ def admin_vehicle_save(payload: VehicleIn, user: dict = Depends(require_admin)) 
                 update vehicles set
                     plate=%(plate)s, model=%(model)s, fuel_norm=%(fuel_norm)s,
                     motohour_norm=%(motohour_norm)s, tank_capacity=%(tank_capacity)s,
+                    fuel_type=%(fuel_type)s,
                     is_active=%(is_active)s, vin=%(vin)s, engine_no=%(engine_no)s,
                     chassis_no=%(chassis_no)s, driver_name=%(driver_name)s,
                     driver_rank=%(driver_rank)s, driver_position=%(driver_position)s,
@@ -1127,12 +1174,13 @@ def admin_vehicle_save(payload: VehicleIn, user: dict = Depends(require_admin)) 
                 """
                 insert into vehicles
                     (plate, model, fuel_norm, motohour_norm, tank_capacity,
-                     is_active, vin, engine_no, chassis_no, driver_name,
+                     fuel_type, is_active, vin, engine_no, chassis_no, driver_name,
                      driver_rank, driver_position, driver_license,
                      sts_expires, diagnostic_card_expires, red_stripe_expires)
                 values
                     (%(plate)s, %(model)s, %(fuel_norm)s, %(motohour_norm)s,
-                     %(tank_capacity)s, %(is_active)s, %(vin)s, %(engine_no)s,
+                     %(tank_capacity)s, %(fuel_type)s, %(is_active)s, %(vin)s,
+                     %(engine_no)s,
                      %(chassis_no)s, %(driver_name)s, %(driver_rank)s,
                      %(driver_position)s, %(driver_license)s,
                      %(sts_expires)s, %(diagnostic_card_expires)s,
@@ -1140,7 +1188,8 @@ def admin_vehicle_save(payload: VehicleIn, user: dict = Depends(require_admin)) 
                 on conflict (plate) do update set
                     model=excluded.model, fuel_norm=excluded.fuel_norm,
                     motohour_norm=excluded.motohour_norm,
-                    tank_capacity=excluded.tank_capacity, is_active=excluded.is_active,
+                    tank_capacity=excluded.tank_capacity,
+                    fuel_type=excluded.fuel_type, is_active=excluded.is_active,
                     vin=excluded.vin, engine_no=excluded.engine_no,
                     chassis_no=excluded.chassis_no, driver_name=excluded.driver_name,
                     driver_rank=excluded.driver_rank,
@@ -1222,6 +1271,10 @@ def admin_migrate(user: dict = Depends(require_admin)) -> dict:
         "alter table waybills add column if not exists corrected_by_name text",
         "create index if not exists idx_waybills_vehicle_date "
         "on waybills(vehicle_id, waybill_date desc nulls last, created_at desc)",
+        "alter table vehicles add column if not exists fuel_type "
+        "text not null default 'diesel'",
+        "update vehicles set fuel_type = 'petrol' where lower(model) like '%уаз%' "
+        "or lower(model) like '%патриот%'",
         "update waybills set waybill_date = created_at::date "
         "where waybill_date is null",
         "create table if not exists error_log ("
