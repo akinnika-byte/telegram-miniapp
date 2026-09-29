@@ -496,6 +496,8 @@ async function submitPin() {
     buzz("success");
     openMenu();
     prefetchDriver();
+    // обновим сессию, чтобы роль/машина не оставались от прошлого входа
+    api("/api/session", { method: "POST" }).then(s => { session = s; }).catch(() => {});
   } catch (e) {
     if (!IN_TELEGRAM) setToken("");
     buzz("error");
@@ -521,7 +523,10 @@ $("logout").addEventListener("click", async () => {
 
 /* ---------- Меню ---------- */
 function openMenu() {
-  const name = (session && session.name) ? session.name.split(" (@")[0] : "";
+  // Имя берём у машины, в которую только что вошли (а не из старой сессии)
+  const name = (vehicle && vehicle.driver_name)
+    ? vehicle.driver_name
+    : ((session && session.name) ? session.name.split(" (@")[0] : "");
   $("menu-hello").textContent = name ? `Здравствуйте, ${name}!` : "Здравствуйте!";
   $("menu-sub").textContent = `Машина ${vehicle.plate} · ${vehicle.model || "—"}`;
 
