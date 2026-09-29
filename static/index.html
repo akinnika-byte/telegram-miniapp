@@ -642,11 +642,18 @@ async function loadVehicle() {
         <div>Норма: <b>${v.fuel_norm}</b> л/100км · <b>${v.motohour_norm}</b> л/моточас</div></div>
       </div>
       <div class="card">
+        <h3>📍 Сейчас — по последнему путевому</h3>
+        ${vehRow("Пробег по спидометру", v.last_km_end != null ? nf(v.last_km_end) + " км" : null)}
+        ${vehRow("Остаток в баке", v.last_tank_end != null ? nf(v.last_tank_end) + " л" : null)}
+        ${v.last_waybill_no ? `<p class="muted" style="font-size:12px;margin:8px 0 0">По путевому №${esc(v.last_waybill_no)} от ${dstr(v.last_waybill_date)}</p>` : ""}
+      </div>
+      <div class="card">
         <h3>🔧 Характеристики</h3>
         ${vehRow("VIN", v.vin)}
         ${vehRow("Двигатель", v.engine_no)}
         ${vehRow("Шасси", v.chassis_no)}
         ${vehRow("Объём бака", v.tank_capacity ? v.tank_capacity + " л" : null)}
+        ${vehRow("Тип топлива", v.fuel_type === "petrol" ? "Бензин" : "Дизель")}
       </div>
       <div class="card">
         <h3>👤 Водитель</h3>

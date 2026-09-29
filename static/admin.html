@@ -71,6 +71,13 @@
   .stat { background: var(--card); border-radius: 14px; padding: 12px 14px; }
   .stat .n { font-size: 22px; font-weight: 800; font-variant-numeric: tabular-nums; }
   .stat .t { font-size: 12px; color: var(--hint); margin-top: 2px; }
+  .fuel-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .fuel-grid > div { background: rgba(128,140,170,.10); border-radius: 12px; padding: 12px; }
+  .fg-t { font-size: 12px; font-weight: 700; color: var(--hint); letter-spacing: .3px; margin-bottom: 8px; }
+  .fg-r { display: flex; justify-content: space-between; gap: 8px; font-size: 14px; padding: 3px 0; }
+  .fg-r b { font-variant-numeric: tabular-nums; }
+  .fg-total { margin-top: 12px; padding-top: 10px; border-top: 1px solid var(--border);
+              font-size: 13px; color: var(--hint); }
 
   .card { background: var(--card); border-radius: 16px; margin-bottom: 10px; overflow: hidden; }
   .row { display: flex; justify-content: space-between; align-items: center; gap: 10px; padding: 14px 16px; cursor: pointer; }
@@ -94,6 +101,9 @@
   .field input { width: 100%; height: 48px; border-radius: 12px; border: 1.5px solid var(--border);
                  background: var(--bg); color: var(--text); font-size: 16px; padding: 0 14px; outline: none; }
   .field input:focus { border-color: var(--accent); }
+  .field select { width: 100%; height: 48px; border-radius: 12px; border: 1.5px solid var(--border);
+                  background: var(--bg); color: var(--text); font-size: 16px; padding: 0 12px;
+                  outline: none; margin: 0; }
   .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 0 12px; }
   .group-title { font-size: 12px; font-weight: 700; color: var(--hint); text-transform: uppercase;
                  letter-spacing: .4px; margin: 0 0 8px; }
@@ -459,16 +469,33 @@ function renderReport() {
   if (!data) { box.innerHTML = '<div class="spin"></div>'; return; }
   if (data.error) { box.innerHTML = `<div class="empty">${esc(data.error)}</div>`; return; }
   if (!data.groups.length) { box.innerHTML = '<div class="empty">За этот период путевых листов нет</div>'; return; }
+  const zero = { received: 0, spent: 0, calc: 0, km: 0 };
+  const t = data.totals || { all: zero, diesel: zero, petrol: zero };
   box.innerHTML =
     `<div class="stats">
        <div class="stat"><div class="n">${data.total_count}</div><div class="t">Путёвок</div></div>
        <div class="stat"><div class="n">${data.groups.length}</div><div class="t">Машин</div></div>
        <div class="stat"><div class="n" style="color:${data.total_bad ? "var(--bad)" : "var(--ok)"}">${data.total_bad}</div><div class="t">С расхождением</div></div>
+     </div>
+     <div class="card" style="padding:14px 16px">
+       <h3 style="margin:0 0 10px;font-size:12px;color:var(--hint);letter-spacing:.4px">ТОПЛИВО ЗА ПЕРИОД</h3>
+       <div class="fuel-grid">
+         <div><div class="fg-t">Дизель</div>
+           <div class="fg-r"><span>Получено</span><b>${nf(t.diesel.received)} л</b></div>
+           <div class="fg-r"><span>Затрачено</span><b>${nf(t.diesel.spent)} л</b></div>
+           <div class="fg-r"><span>Пробег</span><b>${nf(t.diesel.km)} км</b></div></div>
+         <div><div class="fg-t">Бензин (УАЗ)</div>
+           <div class="fg-r"><span>Получено</span><b>${nf(t.petrol.received)} л</b></div>
+           <div class="fg-r"><span>Затрачено</span><b>${nf(t.petrol.spent)} л</b></div>
+           <div class="fg-r"><span>Пробег</span><b>${nf(t.petrol.km)} км</b></div></div>
+       </div>
+       <div class="fg-total">Всего: получено <b>${nf(t.all.received)} л</b> · затрачено <b>${nf(t.all.spent)} л</b> · пробег <b>${nf(t.all.km)} км</b></div>
      </div>` +
     data.groups.map(g => `
       <div class="card" data-key="${esc(g.plate)}">
         <div class="row" data-toggle>
-          <div><div class="plate">${esc(g.plate)}</div><div class="meta">${esc(g.model)} · путёвок: ${g.count}</div></div>
+          <div><div class="plate">${esc(g.plate)}</div>
+            <div class="meta">${esc(g.model)} · ${g.fuel_type === "petrol" ? "бензин" : "дизель"} · путёвок: ${g.count}</div></div>
           <div class="right"><span class="badge ${g.has_bad ? "bad" : "ok"}">${g.has_bad ? "РАСХОЖДЕНИЕ" : "OK"}</span>
             <div style="margin-top:6px">${nf(g.total_km)} км · ${nf(g.fuel_spent)} л</div></div>
         </div>
@@ -477,11 +504,13 @@ function renderReport() {
             <div class="head"><b>№${esc(it.waybill_no)}</b>
               <span>${it.is_corrected ? '<span class="badge warn">ИСПРАВЛЕН</span> ' : ""}<span class="badge ${it.is_ok ? "ok" : "bad"}">${it.is_ok ? "OK" : "РАСХОЖДЕНИЕ"}</span></span></div>
             <div class="kv">
-              <span>Пробег: <b>${nf(it.total_km)} км</b></span>
-              <span>Топл. расчёт: <b>${nf(it.fuel_calc)} л</b></span>
-              <span>Получено: <b>${nf(it.fuel_in)} л</b></span>
+              <span>Бак на начало: <b>${nf(it.tank_start)} л</b></span>
+              <span>Бак на конец: <b>${nf(it.tank_end)} л</b></span>
+              <span>Пройдено: <b>${nf(it.total_km)} км</b></span>
+              <span>Одометр конечный: <b>${nf(it.km_end)} км</b></span>
+              <span>Получено топлива: <b>${nf(it.fuel_in)} л</b></span>
               <span>Затрачено: <b>${nf(it.fuel_spent)} л</b></span>
-              <span>Бак нач/кон: <b>${nf(it.tank_start)} / ${nf(it.tank_end)} л</b></span>
+              <span>Расчёт по норме: <b>${nf(it.fuel_calc)} л</b></span>
               <span>Моточасы: <b>${nf(it.motohours)}</b></span>
             </div>
             ${it.author ? `<div class="meta" style="margin-top:6px">Внёс: ${esc(it.author)}</div>` : ""}
@@ -644,10 +673,15 @@ function renderVehicles(box, mode) {
   if (list.error) { box.innerHTML = `<div class="empty">${esc(list.error)}</div>`; return; }
   if (!list.length) { box.innerHTML = '<div class="empty">Машин нет</div>'; return; }
   box.innerHTML = list.map(v => {
+    const fuelLabel = v.fuel_type === "petrol" ? "бензин" : "дизель";
     const nums = mode === "norms"
       ? `<div class="kv"><span>Норма: <b>${v.fuel_norm} л/100км</b></span><span>Моточас: <b>${v.motohour_norm}</b></span>
-         <span>Бак: <b>${v.tank_capacity} л</b></span><span>${v.is_active ? "активна" : "не активна"}</span></div>`
-      : `<div class="meta">${esc(v.model)}${v.driver_name ? " · " + esc(v.driver_name) : ""}</div>`;
+         <span>Бак: <b>${v.tank_capacity} л</b></span><span>${fuelLabel}</span></div>`
+      : `<div class="meta">${esc(v.model)}${v.driver_name ? " · " + esc(v.driver_name) : ""} · ${fuelLabel}</div>
+         <div class="kv" style="margin-top:6px">
+           <span>Одометр: <b>${v.last_km_end != null ? nf(v.last_km_end) + " км" : "—"}</b></span>
+           <span>В баке: <b>${v.last_tank_end != null ? nf(v.last_tank_end) + " л" : "—"}</b></span>
+         </div>`;
     return `<div class="card"><div class="row" data-plate="${esc(v.plate)}">
         <div><div class="plate">${esc(v.plate)}</div>${nums}</div>
         <div class="right" style="color:var(--accent)">изменить ›</div>
@@ -735,6 +769,7 @@ const FORM_GROUPS = [
     ["fuel_norm", "Норма, л/100км", "decimal"],
     ["motohour_norm", "Норма, л/моточас", "decimal"],
     ["tank_capacity", "Объём бака, л", "decimal"],
+    ["fuel_type", "Тип топлива", "fuel"],
   ]],
   ["Характеристики", [
     ["vin", "VIN", "text"], ["engine_no", "Двигатель", "text"], ["chassis_no", "Шасси", "text"],
@@ -760,6 +795,13 @@ function openVehicleForm(v) {
     <div style="margin-bottom:18px">
       <div class="group-title">${title}</div>
       <div class="grid2">${fields.map(([key, label, type]) => {
+        if (type === "fuel") {
+          const cur = (v && v.fuel_type) || "diesel";
+          return `<div class="field"><label>${label}</label><select id="vf-${key}">
+            <option value="diesel"${cur === "diesel" ? " selected" : ""}>Дизель</option>
+            <option value="petrol"${cur === "petrol" ? " selected" : ""}>Бензин</option>
+          </select></div>`;
+        }
         let val = v && v[key] != null ? v[key] : "";
         if (type === "date" && val) val = String(val).slice(0, 10);
         const im = type === "date" ? "" : (type === "decimal" ? 'inputmode="decimal"' : 'inputmode="numeric"');
