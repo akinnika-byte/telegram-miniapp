@@ -250,6 +250,7 @@ window.addEventListener("unhandledrejection", function (ev) {
     <div class="topbar"><button class="link" data-back>← Меню</button><h2 style="margin:0">Отчёт</h2></div>
     <select id="sel-report"></select>
     <button class="btn primary" id="wb-add" style="margin-bottom:12px">➕ Добавить путевой</button>
+    <button class="btn ghost" id="wb-export" style="margin-bottom:12px">📥 Расшифровка (Excel)</button>
     <div id="report-body"><div class="spin"></div></div>
   </div>
 
@@ -1065,6 +1066,36 @@ on("wb-add", "click", () => {
   $("add-wbno").value = "";
   if ($("add-period")) $("add-period").value = currentPeriod || "";
   show("scr-add-wb");
+});
+on("wb-export", "click", async () => {
+  if (!currentPeriod) return toast("Выберите период");
+  const btn = $("wb-export");
+  const label = btn.innerHTML;
+  try {
+    btn.disabled = true;
+    btn.innerHTML = "Формируем…";
+    const res = await fetch(`/api/admin/export?period_id=${currentPeriod}`, { headers: apiHeaders() });
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      throw new Error(data.detail || "Не удалось сформировать файл");
+    }
+    const blob = await res.blob();
+    const per = (periods || []).filter(p => p.id === currentPeriod)[0];
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "Расшифровка " + ((per && per.name) || "период") + ".xlsx";
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 5000);
+    toast("Расшифровка готова");
+  } catch (e) {
+    toast(e.message);
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = label;
+  }
 });
 on("add-next", "click", async () => {
   const plate = ($("add-plate").value || "").trim();

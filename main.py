@@ -16,8 +16,9 @@ import time
 from collections import deque
 from datetime import date, datetime, timezone
 from typing import Any, Optional
+from urllib.parse import quote
 
-from fastapi import Depends, FastAPI, Header, HTTPException, Request
+from fastapi import Depends, FastAPI, Header, HTTPException, Request, Response
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from psycopg.types.json import Jsonb
@@ -35,6 +36,7 @@ from db import db
 from periods import period_for_date
 from security import InitDataError, validate_init_data
 from waybill import compute
+from export_excel import build_rasshifrovka
 
 app = FastAPI(title="АВТР(ПГ) — проверка путевой документации")
 
@@ -979,6 +981,72 @@ def admin_report(period_id: int, user: dict = Depends(require_admin)) -> dict:
         "totals": totals,
         "sig": sig,
     }
+
+
+@app.get("/api/admin/export")
+def admin_export(period_id: int, user: dict = Depends(require_admin)) -> Response:
+    """Скачать «Расшифровку» (форма № 63) по данным путевых листов за период."""
+    with db() as conn:
+        period = conn.execute(
+            "select * from periods where id = %s", (period_id,)
+        ).fetchone()
+        if not period:
+            raise HTTPException(status_code=404, detail="Период не найден")
+
+        records = conn.execute(
+            """
+            select w.id, w.plate, w.model, w.km_total_odo, w.tank_start, w.tank_end,
+                   w.fuel_in, w.fuel_spent, w.fuel_calc, w.waybill_date,
+                   coalesce(v.fuel_type, 'diesel') as fuel_type
+            from waybills w
+            left join vehicles v on v.id = w.vehicle_id
+            where w.period_id = %s
+            order by w.plate, w.waybill_date nulls last, w.id
+            """,
+            (period_id,),
+        ).fetchall()
+
+    if not records:
+        raise HTTPException(status_code=400, detail="За период нет путевых листов")
+
+    groups: dict[str, dict] = {}
+    for r in records:
+        g = groups.setdefault(r["plate"], {
+            "plate": r["plate"],
+            "model": r["model"],
+            "fuel_type": r["fuel_type"] or "diesel",
+            "km": 0.0,
+            "fuel_in": 0.0,
+            "fuel_spent": 0.0,
+            "fuel_calc": 0.0,
+            "tank_start": float(r["tank_start"]),
+            "tank_end": float(r["tank_end"]),
+        })
+        g["km"] += float(r["km_total_odo"])
+        g["fuel_in"] += float(r["fuel_in"])
+        g["fuel_spent"] += float(r["fuel_spent"])
+        g["fuel_calc"] += float(r["fuel_calc"])
+        g["tank_end"] = float(r["tank_end"])
+
+    def sort_key(p: str):
+        digits = "".join(ch for ch in p if ch.isdigit())
+        return (0, int(digits)) if digits else (1, p)
+
+    rows = [groups[p] for p in sorted(groups, key=sort_key)]
+    for g in rows:
+        for key in ("km", "fuel_in", "fuel_spent", "fuel_calc"):
+            g[key] = round(g[key], 2)
+    data = build_rasshifrovka(period, rows)
+
+    filename = f"Расшифровка {period['name']}.xlsx"
+    return Response(
+        content=data,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={
+            "Content-Disposition": f"attachment; filename*=UTF-8''{quote(filename)}",
+            "Cache-Control": "no-store",
+        },
+    )
 
 
 @app.get("/api/admin/summary")
