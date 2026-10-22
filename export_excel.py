@@ -130,7 +130,9 @@ def build_rasshifrovka(period: dict, records: list) -> bytes:
             values = [
                 index, it.get("model") or "", it.get("plate") or "",
                 km, tank_start, fuel_in, fuel_spent, "-",
-                fuel_calc, "-", round(fuel_calc - fuel_spent, 2), tank_end,
+                # «Положено по норме» = фактически израсходовано (как в бланке),
+                # экономия/перерасход не считаем — прочерк.
+                f"=G{row}", "-", "-", tank_end,
             ]
             for col, value in enumerate(values, start=1):
                 align = LEFT if col == 2 else CENTER

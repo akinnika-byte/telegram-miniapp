@@ -974,6 +974,7 @@ function openVehicleForm(v) {
     </div>`).join("");
   show("scr-form");
 }
+on("veh-add", "click", () => { openVehicleForm(null); });
 on("form-cancel", "click", () => { show("scr-vehicles"); renderVehicles($("vehicles-body"), "full"); });
 on("form-save", "click", async () => {
   const body = { id: editing ? editing.id : null, is_active: true };
