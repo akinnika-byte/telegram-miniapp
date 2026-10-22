@@ -79,3 +79,5 @@ tank_end_calc  = tank_start + fuel_in - P
 - JS должен работать на старых webview: не использовать `flatMap`, `??`, `AbortController` без проверки.
 - После тестов чистить тестовые данные (`waybills`, `app_users`, `activity_log`).
 - Кэш Telegram: страницы отдают `Cache-Control: no-store`; при изменении админки менять параметр версии в редиректе `/admin?v=N#just` в `index.html`.
+- Supabase Free ставит проект на паузу после 7 дней без активности: ошибка `tenant/user ... not found`, DNS проекта пропадает. Лечится кнопкой **Resume** в дашборде — данные сохраняются. Профилактика: пинг `/api/health` каждые 5–10 минут (эндпоинт делает `select 1`, поэтому оживляет и Render, и Supabase).
+- Восстановление таблиц `public` из логического дампа Supabase: `python scripts/restore_from_dump.py "<dump.backup.gz>" [--drop]` (служебные схемы Supabase не затрагиваются).
