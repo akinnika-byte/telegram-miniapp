@@ -11,6 +11,7 @@ Backend на FastAPI:
 from __future__ import annotations
 
 import hashlib
+import hmac
 import secrets
 import time
 from collections import deque
@@ -983,9 +984,37 @@ def admin_report(period_id: int, user: dict = Depends(require_admin)) -> dict:
     }
 
 
+def _export_sig(period_id: int, exp: int) -> str:
+    """Подпись одноразовой ссылки на скачивание расшифровки."""
+    return hmac.new(
+        BOT_TOKEN.encode("utf-8"), f"{period_id}:{exp}".encode("utf-8"), hashlib.sha256
+    ).hexdigest()[:32]
+
+
+@app.get("/api/admin/export-link")
+def admin_export_link(period_id: int, user: dict = Depends(require_admin)) -> dict:
+    """Короткая подписанная ссылка на файл (для скачивания внутри Telegram)."""
+    exp = int(time.time()) + 600
+    return {
+        "url": f"/api/admin/export?period_id={period_id}&exp={exp}&sig={_export_sig(period_id, exp)}",
+        "expires_in": 600,
+    }
+
+
 @app.get("/api/admin/export")
-def admin_export(period_id: int, user: dict = Depends(require_admin)) -> Response:
+def admin_export(
+    period_id: int,
+    exp: Optional[int] = None,
+    sig: str = "",
+    x_telegram_init_data: str = Header(default="", alias="X-Telegram-Init-Data"),
+    authorization: str = Header(default=""),
+) -> Response:
     """Скачать «Расшифровку» (форма № 63) по данным путевых листов за период."""
+    signed = bool(exp and sig and exp >= int(time.time())
+                  and hmac.compare_digest(_export_sig(period_id, exp), sig))
+    if not signed:
+        require_admin(current_user(x_telegram_init_data, authorization))
+
     with db() as conn:
         period = conn.execute(
             "select * from periods where id = %s", (period_id,)

@@ -1071,20 +1071,30 @@ on("wb-export", "click", async () => {
   if (!currentPeriod) return toast("Выберите период");
   const btn = $("wb-export");
   const label = btn.innerHTML;
+  const per = (periods || []).filter(p => p.id === currentPeriod)[0];
+  const fname = "Расшифровка " + ((per && per.name) || "период") + ".xlsx";
   try {
     btn.disabled = true;
     btn.innerHTML = "Формируем…";
+    // В Telegram — системное скачивание по подписанной ссылке
+    if (tg && typeof tg.downloadFile === "function") {
+      try {
+        const link = await api(`/api/admin/export-link?period_id=${currentPeriod}`);
+        tg.downloadFile({ url: location.origin + link.url, file_name: fname });
+        toast("Файл скачивается");
+        return;
+      } catch (_) { /* ниже — обычное скачивание */ }
+    }
     const res = await fetch(`/api/admin/export?period_id=${currentPeriod}`, { headers: apiHeaders() });
     if (!res.ok) {
       const data = await res.json().catch(() => ({}));
       throw new Error(data.detail || "Не удалось сформировать файл");
     }
     const blob = await res.blob();
-    const per = (periods || []).filter(p => p.id === currentPeriod)[0];
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = "Расшифровка " + ((per && per.name) || "период") + ".xlsx";
+    a.download = fname;
     document.body.appendChild(a);
     a.click();
     a.remove();
