@@ -147,6 +147,32 @@
            background: #111; color: #fff; padding: 13px 20px; border-radius: 14px; font-size: 14px;
            transition: transform .35s; max-width: 90%; text-align: center; z-index: 50; }
   .toast.show { transform: translateX(-50%) translateY(0); }
+
+  /* ---- Страница расчёта ---- */
+  .status { border-radius: 18px; padding: 18px 16px; text-align: center; margin-bottom: 14px; }
+  .status .big { font-size: 20px; font-weight: 800; margin-bottom: 4px; }
+  .status .small { font-size: 13px; opacity: .9; }
+  .status.ok { background: rgba(46, 204, 113, .15); color: var(--ok); }
+  .status.bad { background: rgba(255, 91, 91, .15); color: var(--bad); }
+  .cmp-head, .cmp-row { display: grid; grid-template-columns: 1.4fr 1fr 1fr; gap: 8px; align-items: center; }
+  .cmp-head { font-size: 11px; color: var(--hint); font-weight: 700; letter-spacing: .3px;
+              padding-bottom: 8px; border-bottom: 1px solid var(--border); }
+  .cmp-head span:not(:first-child), .cmp-row .a, .cmp-row .b { text-align: right; }
+  .cmp-row { padding: 11px 0; border-bottom: 1px solid var(--border); font-size: 14px;
+             font-variant-numeric: tabular-nums; }
+  .cmp-row:last-child { border-bottom: none; }
+  .cmp-row .k { color: var(--hint); }
+  .cmp-row .a { font-weight: 800; }
+  .cmp-row .b { color: var(--hint); }
+  .cmp-row.good .a { color: var(--ok); }
+  .cmp-row.bad .a { color: var(--bad); }
+  .cmp-row.bad .b { color: var(--ok); font-weight: 700; }
+  .mismatch { border: 1.5px solid var(--bad); border-radius: 16px; padding: 16px;
+              margin-bottom: 14px; font-size: 14px; line-height: 1.55; }
+  .mismatch .title { color: var(--bad); font-weight: 800; margin-bottom: 8px; }
+  .mismatch ul { margin: 6px 0 10px; padding-left: 20px; }
+  .mismatch .calc { margin-top: 6px; line-height: 1.7; }
+  .mismatch .calc b { color: var(--accent); font-size: 16px; }
 </style>
 </head>
 <body>
@@ -290,14 +316,37 @@ window.addEventListener("unhandledrejection", function (ev) {
       </div>
     </div>
     <div class="card" style="padding:16px"><div class="grid2" id="wb-form"></div></div>
-    <button class="btn primary" id="wb-save">Проверить и сохранить</button>
+    <button class="btn primary" id="wb-check">Проверить</button>
     <button class="btn ghost" id="wb-delete" style="margin-top:10px;color:var(--bad);border-color:var(--bad);display:none">Удалить путевой</button>
     <button class="btn ghost" id="wb-cancel" style="margin-top:10px">Отмена</button>
   </div>
 
+  <!-- Страница расчёта путевого -->
+  <div class="screen" id="scr-wb-result">
+    <div class="status" id="wbr-status">
+      <div class="big" id="wbr-big">—</div>
+      <div class="small" id="wbr-small">—</div>
+    </div>
+    <div class="card">
+      <h3 style="margin:0 0 8px;font-size:12px;color:var(--hint);letter-spacing:.4px">СВЕРКА ДАННЫХ</h3>
+      <div class="cmp-head"><span>Показатель</span><span>Ваши данные</span><span>По расчёту</span></div>
+      <div id="wbr-cmp"></div>
+    </div>
+    <div class="card">
+      <h3 style="margin:0 0 8px;font-size:12px;color:var(--hint);letter-spacing:.4px">ПРАВИЛЬНЫЙ РАСЧЁТ ТОПЛИВА</h3>
+      <div class="row"><span class="l">P1 (без груза, −15%)</span><span class="v" id="wbr-p1">—</span></div>
+      <div class="row"><span class="l">P2 (с грузом)</span><span class="v" id="wbr-p2">—</span></div>
+      <div class="row" id="wbr-row-h"><span class="l">H (моточасы)</span><span class="v" id="wbr-h">—</span></div>
+      <div class="row"><span class="l">P (итого топливо)</span><span class="v" id="wbr-p">—</span></div>
+    </div>
+    <div id="wbr-mismatch"></div>
+    <button class="btn primary" id="wbr-save">Сохранить</button>
+    <button class="btn ghost" id="wbr-fix" style="margin-top:10px">✏️ Исправить</button>
+    <button class="btn ghost" id="wbr-done" style="margin-top:10px">Готово</button>
+  </div>
+
   <!-- Новый путевой: ввод ГРЗ -->
-  <div class="screen" id="scr-add-wb">
-    <div class="topbar"><button class="link" data-backto="scr-report">← Отчёт</button><h2 style="margin:0">Новый путевой</h2></div>
+  <div class="screen" id="scr-add-wb">    <div class="topbar"><button class="link" data-backto="scr-report">← Отчёт</button><h2 style="margin:0">Новый путевой</h2></div>
     <div class="card" style="padding:16px">
       <div class="field">
         <label>ГРЗ машины (4 цифры)</label>
@@ -1025,10 +1074,13 @@ on("add-next", "click", async () => {
   } catch (e) { return toast(e.message); }
   openWaybillCreate(plate, { waybill_no: wbno, period_id: pid });
 });
-on("wb-save", "click", async () => {
-  const b = $("wb-save");
+/* ---------- Проверка путевого: страница расчёта ---------- */
+let wbPayload = null;
+
+function collectWaybillPayload() {
   const body = {
-    id: editingWb.id, plate: editingWb.plate,
+    id: editingWb ? editingWb.id : null,
+    plate: editingWb ? editingWb.plate : "",
     period_id: parseInt($("wb-period").value, 10) || currentPeriod,
     waybill_no: $("wbf-waybill_no").value.trim(),
     date: $("wbf-waybill_date").value,
@@ -1036,21 +1088,103 @@ on("wb-save", "click", async () => {
   ["km_start", "km_end", "km_empty", "km_loaded", "tank_start",
    "fuel_in", "tank_end", "fuel_spent", "motohours"]
     .forEach(k => body[k] = parseFloat(($("wbf-" + k).value || "0").replace(",", ".")) || 0);
-  if (!body.waybill_no) return toast("Укажите номер путевого листа");
+  return body;
+}
+
+function renderWbResult(d, payload, saved) {
+  const bad = !d.is_ok;
+  const st = $("wbr-status");
+  st.className = "status " + (bad ? "bad" : "ok");
+  if (saved) {
+    $("wbr-big").textContent = bad ? "✔ Сохранено (с расхождениями)" : "✔ Сохранено";
+    $("wbr-small").textContent = `Путевой №${payload.waybill_no} сохранён`;
+  } else {
+    $("wbr-big").textContent = bad ? "⚠ Найдены расхождения" : "✔ Данные корректны";
+    $("wbr-small").textContent = bad
+      ? "Исправьте данные или сохраните как есть"
+      : "Можно сохранять";
+  }
+
+  const rows = [
+    ["Пробег (одометр)", d.km_total_odo, d.km_total_input, "км", d.km_ok],
+    ["Топливо затрачено", d.fuel_spent, d.fuel_calc, "л", d.fuel_ok],
+    ["Остаток в баке", d.tank_end, d.tank_end_calc, "л", d.tank_ok],
+  ];
+  $("wbr-cmp").innerHTML = rows.map(([k, mine, calc, unit, ok]) => `
+    <div class="cmp-row ${ok ? "good" : "bad"}">
+      <span class="k">${k}</span>
+      <span class="a">${nf(mine)} ${unit}</span>
+      <span class="b">${nf(calc)} ${unit}</span>
+    </div>`).join("");
+
+  $("wbr-p1").textContent = d.p1 + " л";
+  $("wbr-p2").textContent = d.p2 + " л";
+  $("wbr-h").textContent = d.h + " л";
+  $("wbr-p").textContent = d.fuel_calc + " л";
+  $("wbr-row-h").style.display = d.h ? "" : "none";
+
+  const errors = [];
+  if (!d.km_ok) errors.push(`километраж — расхождение на <b>${Math.abs(d.km_total_odo - d.km_total_input).toFixed(2)} км</b>`);
+  if (!d.fuel_ok) errors.push(`топливо — расхождение на <b>${Math.abs(d.fuel_spent - d.fuel_calc).toFixed(1)} л</b>`);
+  if (!d.tank_ok) errors.push(`остаток в баке — расхождение на <b>${Math.abs(d.tank_end - d.tank_end_calc).toFixed(1)} л</b>`);
+
+  $("wbr-mismatch").innerHTML = errors.length ? `
+    <div class="mismatch">
+      <div class="title">Найдено несоответствие</div>
+      <ul>${errors.map(e => `<li>${e}</li>`).join("")}</ul>
+      <div>Должно быть:</div>
+      <div class="calc">
+        P1 = <b>${d.p1}</b> л<br>P2 = <b>${d.p2}</b> л<br>
+        ${d.h ? `H = <b>${d.h}</b> л<br>` : ""}P = <b>${d.fuel_calc}</b> л
+      </div>
+    </div>` : "";
+
+  $("wbr-save").style.display = saved ? "none" : "";
+  $("wbr-fix").style.display = errors.length ? "" : "none";
+  $("wbr-done").style.display = saved ? "" : "none";
+}
+
+on("wb-check", "click", async () => {
+  const payload = collectWaybillPayload();
+  if (!payload.waybill_no) return toast("Укажите номер путевого листа");
+  try {
+    const data = await api("/api/waybill/check", { method: "POST", body: JSON.stringify(payload) });
+    wbPayload = payload;
+    renderWbResult(data.result, payload, false);
+    show("scr-wb-result");
+  } catch (e) { toast(e.message); }
+});
+
+on("wbr-fix", "click", () => {
+  if (!wbPayload) return;
+  editingWb = Object.assign({}, wbPayload);
+  renderWaybillForm();
+});
+
+on("wbr-save", "click", async () => {
+  if (!wbPayload) return;
+  const b = $("wbr-save");
   try {
     b.disabled = true; b.textContent = "Сохраняем…";
-    const data = await api("/api/waybill/save", { method: "POST", body: JSON.stringify(body) });
-    const ok = !!(data.result && data.result.is_ok);
-    toast(ok ? "Сохранено ✓" : "Сохранено, но есть расхождения");
-    if (tg && tg.HapticFeedback) tg.HapticFeedback.notificationOccurred("success");
-    if (body.period_id) {
-      currentPeriod = body.period_id;
-      ["sel-report", "sel-summary"].forEach(id => { if ($(id)) $(id).value = currentPeriod; });
+    const data = await api("/api/waybill/save", { method: "POST", body: JSON.stringify(wbPayload) });
+    wbPayload.id = data.id;
+    if (wbPayload.period_id) {
+      currentPeriod = wbPayload.period_id;
+      ["sel-report", "sel-summary", "add-period"].forEach(id => {
+        if ($(id)) $(id).value = currentPeriod;
+      });
     }
     await refreshAll();
-    show("scr-report"); renderReport();
+    renderWbResult(data.result, wbPayload, true);
+    if (tg && tg.HapticFeedback) tg.HapticFeedback.notificationOccurred("success");
   } catch (e) { toast(e.message); }
-  finally { b.disabled = false; b.textContent = "Проверить и сохранить"; }
+  finally { b.disabled = false; b.textContent = "Сохранить"; }
+});
+
+on("wbr-done", "click", () => {
+  wbPayload = null;
+  show("scr-report");
+  renderReport();
 });
 
 /* ---------- Живое обновление: только при изменениях ---------- */
