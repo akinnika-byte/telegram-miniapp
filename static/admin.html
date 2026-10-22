@@ -412,7 +412,15 @@ const api = async (path, opts = {}) => {
 const show = (id) => { document.querySelectorAll(".screen").forEach(s => s.classList.remove("active"));
   $(id).classList.add("active"); if (tg) tg.expand(); };
 const esc = (s) => String(s == null ? "" : s).replace(/[&<>"]/g, c => ({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;" }[c]));
-const nf = (v, d = 1) => Number(v == null ? 0 : v).toFixed(d);
+const nf = (v, d = 1) => {
+  const n = Number(v == null ? 0 : v);
+  return Number.isFinite(n) ? String(Number(n.toFixed(d))) : String(v);
+};
+const numStr = (v) => {
+  if (v == null || v === "") return "";
+  const n = Number(v);
+  return Number.isFinite(n) ? String(n) : String(v);
+};
 const dstr = (s) => s ? new Date(s).toLocaleDateString("ru-RU") : "—";
 const toast = (m) => { const t = $("toast"); t.textContent = m; t.classList.add("show");
   clearTimeout(t._t); t._t = setTimeout(() => t.classList.remove("show"), 2600); };
@@ -789,8 +797,8 @@ function renderVehicles(box, mode) {
   box.innerHTML = list.map(v => {
     const fuelLabel = v.fuel_type === "petrol" ? "бензин" : "дизель";
     const nums = mode === "norms"
-      ? `<div class="kv"><span>Норма: <b>${v.fuel_norm} л/100км</b></span><span>Моточас: <b>${v.motohour_norm}</b></span>
-         <span>Бак: <b>${v.tank_capacity} л</b></span><span>${fuelLabel}</span></div>`
+      ? `<div class="kv"><span>Норма: <b>${numStr(v.fuel_norm)} л/100км</b></span><span>Моточас: <b>${numStr(v.motohour_norm)}</b></span>
+         <span>Бак: <b>${numStr(v.tank_capacity)} л</b></span><span>${fuelLabel}</span></div>`
       : `<div class="meta">${esc(v.model)}${v.driver_name ? " · " + esc(v.driver_name) : ""} · ${fuelLabel}</div>
          <div class="kv" style="margin-top:6px">
            <span>Одометр: <b>${v.last_km_end != null ? nf(v.last_km_end) + " км" : "—"}</b></span>
@@ -958,6 +966,7 @@ function openVehicleForm(v) {
         }
         let val = v && v[key] != null ? v[key] : "";
         if (type === "date" && val) val = String(val).slice(0, 10);
+        if (type === "decimal" || type === "numeric") val = numStr(val);
         const im = type === "date" ? "" : (type === "decimal" ? 'inputmode="decimal"' : (type === "numeric" ? 'inputmode="numeric"' : ""));
         return `<div class="field"><label>${label}</label><input id="vf-${key}" type="${type === "date" ? "date" : "text"}" ${im} value="${esc(val)}" /></div>`;
       }).join("")}</div>
@@ -1005,6 +1014,7 @@ function renderWaybillForm() {
   $("wb-form").innerHTML = WB_FIELDS.map(([k, label, type]) => {
     let val = it[k] != null ? it[k] : "";
     if (type === "date" && val) val = String(val).slice(0, 10);
+    if (type === "decimal" || type === "numeric") val = numStr(val);
     const im = type === "date" ? "" : (type === "decimal" ? 'inputmode="decimal"' : "");
     return `<div class="field"><label>${label}</label><input id="wbf-${k}" type="${type === "date" ? "date" : "text"}" ${im} value="${esc(val)}" /></div>`;
   }).join("");
@@ -1032,8 +1042,8 @@ async function openWaybillCreate(plate, opts = {}) {
     if (st.last) {
       editingWb.km_start = st.last.km_end;
       editingWb.tank_start = st.last.tank_end;
-      if ($("wbf-km_start")) $("wbf-km_start").value = st.last.km_end;
-      if ($("wbf-tank_start")) $("wbf-tank_start").value = st.last.tank_end;
+      if ($("wbf-km_start")) $("wbf-km_start").value = numStr(st.last.km_end);
+      if ($("wbf-tank_start")) $("wbf-tank_start").value = numStr(st.last.tank_end);
       toast(`Начальные данные — из путевого №${st.last.waybill_no}`);
     }
   } catch (e) { /* заполнят вручную */ }

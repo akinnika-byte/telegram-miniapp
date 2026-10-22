@@ -414,7 +414,15 @@ const show = (id) => {
 };
 const esc = (s) => String(s == null ? "" : s).replace(/[&<>"]/g, c => ({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;" }[c]));
 const num = (id) => parseFloat(($(id).value || "0").replace(",", ".")) || 0;
-const nf = (v, d = 1) => Number(v == null ? 0 : v).toFixed(d);
+const nf = (v, d = 1) => {
+  const n = Number(v == null ? 0 : v);
+  return Number.isFinite(n) ? String(Number(n.toFixed(d))) : String(v);
+};
+const numStr = (v) => {
+  if (v == null || v === "") return "";
+  const n = Number(v);
+  return Number.isFinite(n) ? String(n) : String(v);
+};
 const dstr = (s) => s ? new Date(s).toLocaleDateString("ru-RU") : "—";
 const toast = (m) => { const t = $("toast"); t.textContent = m; t.classList.add("show");
   clearTimeout(t._t); t._t = setTimeout(() => t.classList.remove("show"), 2800); };
@@ -548,13 +556,13 @@ async function openForm(rec, opts = {}) {
     : (rec ? "Проверить и сохранить" : "Проверить и отправить");
   $("v-plate").textContent = vehicle.plate;
   $("v-model").textContent = vehicle.model || "—";
-  $("v-norm").textContent = vehicle.fuel_norm;
-  $("v-moto").textContent = vehicle.motohour_norm;
+  $("v-norm").textContent = numStr(vehicle.fuel_norm);
+  $("v-moto").textContent = numStr(vehicle.motohour_norm);
   $("f-waybill").value = rec ? rec.waybill_no : "";
   $("f-date").value = (rec && rec.waybill_date)
     ? String(rec.waybill_date).slice(0, 10)
     : new Date().toISOString().slice(0, 10);
-  FIELD_IDS.forEach(f => $("f-" + f).value = rec && rec[f] != null ? rec[f] : "");
+  FIELD_IDS.forEach(f => $("f-" + f).value = rec && rec[f] != null ? numStr(rec[f]) : "");
   $("form-continuity").style.display = "none";
   show("scr-form");
 
@@ -564,8 +572,8 @@ async function openForm(rec, opts = {}) {
       const st = await api("/api/last-state?plate=" + encodeURIComponent(vehicle.plate));
       const last = st.last;
       if (last) {
-        $("f-km_start").value = last.km_end != null ? last.km_end : "";
-        $("f-tank_start").value = last.tank_end != null ? last.tank_end : "";
+        $("f-km_start").value = numStr(last.km_end);
+        $("f-tank_start").value = numStr(last.tank_end);
         const box = $("form-continuity");
         box.textContent = `Начальные данные — из путевого №${last.waybill_no}`
           + ` (${dstr(last.waybill_date)}): пробег ${nf(last.km_end)} км, бак ${nf(last.tank_end)} л.`;
@@ -639,7 +647,7 @@ async function loadVehicle() {
       <div class="card vehicle">
         <div class="plate">${esc(v.plate)}</div>
         <div class="meta"><div>Модель: <b>${esc(v.model || "—")}</b></div>
-        <div>Норма: <b>${v.fuel_norm}</b> л/100км · <b>${v.motohour_norm}</b> л/моточас</div></div>
+        <div>Норма: <b>${numStr(v.fuel_norm)}</b> л/100км · <b>${numStr(v.motohour_norm)}</b> л/моточас</div></div>
       </div>
       <div class="card">
         <h3>📍 Сейчас — по последнему путевому</h3>
@@ -652,7 +660,7 @@ async function loadVehicle() {
         ${vehRow("VIN", v.vin)}
         ${vehRow("Двигатель", v.engine_no)}
         ${vehRow("Шасси", v.chassis_no)}
-        ${vehRow("Объём бака", v.tank_capacity ? v.tank_capacity + " л" : null)}
+        ${vehRow("Объём бака", v.tank_capacity ? numStr(v.tank_capacity) + " л" : null)}
         ${vehRow("Тип топлива", v.fuel_type === "petrol" ? "Бензин" : "Дизель")}
       </div>
       <div class="card">
