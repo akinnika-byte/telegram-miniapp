@@ -118,6 +118,23 @@
   .chip { flex: 0 0 auto; padding: 8px 14px; border-radius: 999px; border: 1.5px solid var(--border);
           background: transparent; color: var(--hint); font-size: 13px; font-weight: 600; cursor: pointer; }
   .chip.active { background: var(--accent); color: var(--accent-text); border-color: var(--accent); }
+
+  /* ---- Хронология машины ---- */
+  .timeline { display: flex; align-items: stretch; overflow-x: auto; padding: 10px 2px 18px; }
+  .tnode { position: relative; flex: 0 0 200px; background: var(--card); border-radius: 14px;
+           padding: 12px 14px; margin-right: 30px; }
+  .tnode:last-child { margin-right: 0; }
+  .tnode::after {
+    content: ""; position: absolute; right: -24px; top: 50%; width: 18px; height: 2px;
+    background: var(--border); transform: translateY(-50%);
+  }
+  .tnode:last-child::after { display: none; }
+  .tnode .t-n { font-weight: 800; font-size: 16px; }
+  .tnode .t-d { font-size: 11px; color: var(--hint); margin: 2px 0 8px; }
+  .tnode .t-r { display: flex; justify-content: space-between; gap: 8px; font-size: 13px; padding: 2px 0; }
+  .tnode .t-r b { font-variant-numeric: tabular-nums; }
+  .tnode.bad { border: 1px solid var(--bad); }
+  .tnode.corr { border: 1px solid var(--warn); }
   .act { padding: 12px 14px; border-bottom: 1px solid var(--border); font-size: 13px; }
   .act:last-child { border-bottom: none; }
   .act .a { display: flex; justify-content: space-between; gap: 10px; }
@@ -257,9 +274,21 @@ window.addEventListener("unhandledrejection", function (ev) {
     <div id="drv-body"></div>
   </div>
 
+  <!-- Хронология машины -->
+  <div class="screen" id="scr-chrono">
+    <div class="topbar"><button class="link" data-backto="scr-vehicles">← Машины</button><h2 style="margin:0" id="chrono-title">Хронология</h2></div>
+    <div id="chrono-body"></div>
+  </div>
+
   <!-- Правка путевого -->
   <div class="screen" id="scr-waybill">
     <div class="topbar"><button class="link" data-backto="scr-report">← Назад</button><span id="wb-title" style="font-weight:700"></span></div>
+    <div class="card" style="padding:14px 16px">
+      <div class="field" style="margin:0">
+        <label>Отчёт (период) — можно перенести путевой</label>
+        <select id="wb-period"></select>
+      </div>
+    </div>
     <div class="card" style="padding:16px"><div class="grid2" id="wb-form"></div></div>
     <button class="btn primary" id="wb-save">Проверить и сохранить</button>
     <button class="btn ghost" id="wb-delete" style="margin-top:10px;color:var(--bad);border-color:var(--bad);display:none">Удалить путевой</button>
@@ -274,7 +303,15 @@ window.addEventListener("unhandledrejection", function (ev) {
         <label>ГРЗ машины (4 цифры)</label>
         <input id="add-plate" inputmode="numeric" placeholder="напр. 9857" />
       </div>
-      <p class="sub" style="margin:0">Путевой добавится в тот отчёт, в который попадает дата.</p>
+      <div class="field">
+        <label>Номер путевого листа</label>
+        <input id="add-wbno" placeholder="напр. 2589" />
+      </div>
+      <div class="field">
+        <label>Отчёт (период)</label>
+        <select id="add-period"></select>
+      </div>
+      <p class="sub" style="margin:0">Если такой номер уже есть в выбранном отчёте — предупредим.</p>
     </div>
     <button class="btn primary" id="add-next">Далее</button>
   </div>
@@ -400,9 +437,11 @@ async function loadPeriods() {
   currentPeriod = cur ? cur.id : (periods[0] ? periods[0].id : null);
   const opts = periods.map(p =>
     `<option value="${p.id}">${esc(p.name)} — ${p.start_date} … ${p.end_date}</option>`).join("");
-  ["sel-report", "sel-summary"].forEach(id => {
-    $(id).innerHTML = opts;
-    if (currentPeriod) $(id).value = currentPeriod;
+  ["sel-report", "sel-summary", "add-period", "wb-period"].forEach(id => {
+    const el = $(id);
+    if (!el) return;
+    el.innerHTML = opts;
+    if (currentPeriod) el.value = currentPeriod;
   });
 }
 
@@ -417,6 +456,12 @@ async function refreshAll() {
   ]);
   cache = { report, summary, activity, vehicles, drivers };
   lastSig = (report && report.sig) || null;
+  // Если вкладка уже открыта — показываем данные сразу, как только они загрузились
+  const act = document.querySelector(".screen.active");
+  if (act && ["scr-report", "scr-summary", "scr-activity",
+              "scr-vehicles", "scr-drivers"].includes(act.id)) {
+    renderScreen(act.id);
+  }
 }
 
 async function startPanel() {
@@ -466,7 +511,17 @@ function renderScreen(id) {
 function renderReport() {
   const box = $("report-body");
   const data = cache.report;
-  if (!data) { box.innerHTML = '<div class="spin"></div>'; return; }
+  if (!data) {
+    box.innerHTML = '<div class="spin"></div><p class="muted center">Загружаем отчёт…</p>';
+    setTimeout(() => {
+      if (!cache.report && document.getElementById("scr-report").classList.contains("active")) {
+        box.innerHTML = '<div class="empty">Не удалось загрузить. <button class="link" id="rep-retry">Обновить</button></div>';
+        const b = $("rep-retry");
+        if (b) b.addEventListener("click", async () => { await refreshAll(); renderReport(); });
+      }
+    }, 9000);
+    return;
+  }
   if (data.error) { box.innerHTML = `<div class="empty">${esc(data.error)}</div>`; return; }
   if (!data.groups.length) { box.innerHTML = '<div class="empty">За этот период путевых листов нет</div>'; return; }
   const zero = { received: 0, spent: 0, calc: 0, km: 0 };
@@ -499,10 +554,10 @@ function renderReport() {
           <div class="right"><span class="badge ${g.has_bad ? "bad" : "ok"}">${g.has_bad ? "РАСХОЖДЕНИЕ" : "OK"}</span>
             <div style="margin-top:6px">${nf(g.total_km)} км · ${nf(g.fuel_spent)} л</div></div>
         </div>
-        <div class="detail">${g.items.map(it => `
+        <div class="detail">${g.items.map((it, idx) => `
           <div class="item">
-            <div class="head"><b>№${esc(it.waybill_no)}</b>
-              <span>${it.is_corrected ? '<span class="badge warn">ИСПРАВЛЕН</span> ' : ""}<span class="badge ${it.is_ok ? "ok" : "bad"}">${it.is_ok ? "OK" : "РАСХОЖДЕНИЕ"}</span></span></div>
+            <div class="head"><b>${idx + 1}. №${esc(it.waybill_no)}</b>
+              <span><span class="meta" style="margin-right:8px">${idx + 1} из ${g.items.length}${idx === 0 ? " · первый" : ""}${idx === g.items.length - 1 ? " · последний" : ""}</span>${it.is_corrected ? '<span class="badge warn">ИСПРАВЛЕН</span> ' : ""}<span class="badge ${it.is_ok ? "ok" : "bad"}">${it.is_ok ? "OK" : "РАСХОЖДЕНИЕ"}</span></span></div>
             <div class="kv">
               <span>Бак на начало: <b>${nf(it.tank_start)} л</b></span>
               <span>Бак на конец: <b>${nf(it.tank_end)} л</b></span>
@@ -566,7 +621,17 @@ function findReportItem(id) {
 function renderSummary() {
   const box = $("summary-body");
   const data = cache.summary;
-  if (!data) { box.innerHTML = '<div class="spin"></div>'; return; }
+  if (!data) {
+    box.innerHTML = '<div class="spin"></div><p class="muted center">Загружаем сводку…</p>';
+    setTimeout(() => {
+      if (!cache.summary && document.getElementById("scr-summary").classList.contains("active")) {
+        box.innerHTML = '<div class="empty">Не удалось загрузить. <button class="link" id="sum-retry">Обновить</button></div>';
+        const b = $("sum-retry");
+        if (b) b.addEventListener("click", async () => { await refreshAll(); renderSummary(); });
+      }
+    }, 9000);
+    return;
+  }
   if (data.error) { box.innerHTML = `<div class="empty">${esc(data.error)}</div>`; return; }
   if (!data.rows.length) { box.innerHTML = '<div class="empty">Нет данных</div>'; return; }
   const t = data.totals;
@@ -685,12 +750,52 @@ function renderVehicles(box, mode) {
     return `<div class="card"><div class="row" data-plate="${esc(v.plate)}">
         <div><div class="plate">${esc(v.plate)}</div>${nums}</div>
         <div class="right" style="color:var(--accent)">изменить ›</div>
+      </div>
+      <div style="padding:0 16px 12px">
+        <button class="link" data-chrono="${esc(v.plate)}" style="padding:0">🕘 Хронология</button>
       </div></div>`;
   }).join("");
   box.querySelectorAll("[data-plate]").forEach(r => r.addEventListener("click", () => {
     const v = (cache.vehicles || []).find(x => String(x.plate) === r.dataset.plate);
     openVehicleForm(v);
   }));
+  box.querySelectorAll("[data-chrono]").forEach(b => b.addEventListener("click", (e) => {
+    e.stopPropagation();
+    openChrono(b.dataset.chrono);
+  }));
+}
+
+/* ---------- Хронология машины ---------- */
+async function openChrono(plate) {
+  show("scr-chrono");
+  $("chrono-title").textContent = "Хронология · " + plate;
+  $("chrono-body").innerHTML = '<div class="spin"></div>';
+  try {
+    const rows = await api("/api/admin/vehicle-waybills?plate=" + encodeURIComponent(plate));
+    const arr = (rows || []).slice().sort((a, b) => {
+      const da = a.waybill_date || "";
+      const db = b.waybill_date || "";
+      if (da !== db) return da < db ? -1 : 1;
+      return String(a.created_at).localeCompare(String(b.created_at));
+    });
+    if (!arr.length) {
+      $("chrono-body").innerHTML =
+        '<div class="empty">Путевых ещё нет — хронология появится после первого.</div>';
+      return;
+    }
+    $("chrono-body").innerHTML =
+      `<div class="timeline">` + arr.map((w, i) => `
+        <div class="tnode ${!w.is_ok ? "bad" : (w.is_corrected ? "corr" : "")}">
+          <div class="t-n">${i + 1}. №${esc(w.waybill_no)}</div>
+          <div class="t-d">${dstr(w.waybill_date || w.created_at)} · ${esc(w.period_name || "")}</div>
+          <div class="t-r"><span>Одометр</span><b>${nf(w.km_end)} км</b></div>
+          <div class="t-r"><span>Бак</span><b>${nf(w.tank_end)} л</b></div>
+          <div class="t-r"><span>Пробег</span><b>${nf(w.km_total_odo)} км</b></div>
+        </div>`).join("") + `</div>
+      <p class="sub">Слева → справа: от первого путевого к последнему. Записей: ${arr.length}.</p>`;
+  } catch (e) {
+    $("chrono-body").innerHTML = `<div class="empty">${esc(e.message)}</div>`;
+  }
 }
 
 /* ---------- Водители ---------- */
@@ -764,7 +869,7 @@ function openDriverCard(plate) {
 
 /* ---------- Форма машины ---------- */
 const FORM_GROUPS = [
-  ["Основное", [["plate", "ГРЗ (4 цифры)", "text"], ["model", "Модель", "text"]]],
+  ["Основное", [["plate", "ГРЗ (4 цифры)", "numeric"], ["model", "Модель", "text"]]],
   ["Нормы расхода", [
     ["fuel_norm", "Норма, л/100км", "decimal"],
     ["motohour_norm", "Норма, л/моточас", "decimal"],
@@ -804,7 +909,7 @@ function openVehicleForm(v) {
         }
         let val = v && v[key] != null ? v[key] : "";
         if (type === "date" && val) val = String(val).slice(0, 10);
-        const im = type === "date" ? "" : (type === "decimal" ? 'inputmode="decimal"' : 'inputmode="numeric"');
+        const im = type === "date" ? "" : (type === "decimal" ? 'inputmode="decimal"' : (type === "numeric" ? 'inputmode="numeric"' : ""));
         return `<div class="field"><label>${label}</label><input id="vf-${key}" type="${type === "date" ? "date" : "text"}" ${im} value="${esc(val)}" /></div>`;
       }).join("")}</div>
     </div>`).join("");
@@ -843,6 +948,11 @@ function renderWaybillForm() {
   $("wb-title").textContent = it.id
     ? `№${it.waybill_no} · ${it.plate}`
     : `Новый · ${it.plate || ""}`;
+  if ($("wb-period")) {
+    $("wb-period").innerHTML = periods.map(p =>
+      `<option value="${p.id}">${esc(p.name)}</option>`).join("");
+    $("wb-period").value = it.period_id || currentPeriod || "";
+  }
   $("wb-form").innerHTML = WB_FIELDS.map(([k, label, type]) => {
     let val = it[k] != null ? it[k] : "";
     if (type === "date" && val) val = String(val).slice(0, 10);
@@ -855,14 +965,17 @@ function renderWaybillForm() {
 
 function openWaybillForm(it) {
   if (!it) return;
-  editingWb = Object.assign({}, it);
+  editingWb = Object.assign({ period_id: currentPeriod }, it);
   renderWaybillForm();
 }
 
-async function openWaybillCreate(plate) {
+async function openWaybillCreate(plate, opts = {}) {
   editingWb = {
-    id: null, plate: plate, waybill_no: "",
-    waybill_date: new Date().toISOString().slice(0, 10),
+    id: null,
+    plate: plate,
+    waybill_no: opts.waybill_no || "",
+    waybill_date: opts.date || new Date().toISOString().slice(0, 10),
+    period_id: opts.period_id || currentPeriod,
   };
   renderWaybillForm();
   try {
@@ -888,18 +1001,35 @@ on("wb-delete", "click", (e) => {
     } catch (err) { toast(err.message); }
   });
 });
-on("wb-add", "click", () => { $("add-plate").value = ""; show("scr-add-wb"); });
-on("add-next", "click", () => {
+on("wb-add", "click", () => {
+  $("add-plate").value = "";
+  $("add-wbno").value = "";
+  if ($("add-period")) $("add-period").value = currentPeriod || "";
+  show("scr-add-wb");
+});
+on("add-next", "click", async () => {
   const plate = ($("add-plate").value || "").trim();
+  const wbno = ($("add-wbno").value || "").trim();
+  const pid = parseInt($("add-period").value, 10) || currentPeriod;
   if (!/^\d{4}$/.test(plate)) return toast("ГРЗ — ровно 4 цифры");
+  if (!wbno) return toast("Укажите номер путевого листа");
   const v = (cache.vehicles || []).find(x => String(x.plate) === plate);
   if (!v) return toast("Машина с ГРЗ " + plate + " не найдена");
-  openWaybillCreate(plate);
+  try {
+    const chk = await api(
+      `/api/admin/waybill-check?period_id=${pid}&waybill_no=${encodeURIComponent(wbno)}`
+    );
+    if (chk.exists) {
+      return toast(`Путевой №${wbno} уже есть в «${chk.period}» — машина ${chk.plate}`);
+    }
+  } catch (e) { return toast(e.message); }
+  openWaybillCreate(plate, { waybill_no: wbno, period_id: pid });
 });
 on("wb-save", "click", async () => {
   const b = $("wb-save");
   const body = {
     id: editingWb.id, plate: editingWb.plate,
+    period_id: parseInt($("wb-period").value, 10) || currentPeriod,
     waybill_no: $("wbf-waybill_no").value.trim(),
     date: $("wbf-waybill_date").value,
   };
@@ -910,8 +1040,13 @@ on("wb-save", "click", async () => {
   try {
     b.disabled = true; b.textContent = "Сохраняем…";
     const data = await api("/api/waybill/save", { method: "POST", body: JSON.stringify(body) });
-    toast(data.is_ok ? "Исправлено ✓" : "Сохранено, но есть расхождения");
+    const ok = !!(data.result && data.result.is_ok);
+    toast(ok ? "Сохранено ✓" : "Сохранено, но есть расхождения");
     if (tg && tg.HapticFeedback) tg.HapticFeedback.notificationOccurred("success");
+    if (body.period_id) {
+      currentPeriod = body.period_id;
+      ["sel-report", "sel-summary"].forEach(id => { if ($(id)) $(id).value = currentPeriod; });
+    }
     await refreshAll();
     show("scr-report"); renderReport();
   } catch (e) { toast(e.message); }
