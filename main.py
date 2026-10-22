@@ -103,6 +103,7 @@ class CodeIn(BaseModel):
 
 class WaybillIn(BaseModel):
     id: Optional[int] = None          # если задан — редактируем существующий
+    period_id: Optional[int] = None   # явный выбор отчёта (для админов)
     plate: str
     waybill_no: str
     date: Optional[str] = None
@@ -642,7 +643,21 @@ def waybill_save(payload: WaybillIn, user: dict = Depends(current_user)) -> dict
     with db() as conn:
         vehicle = find_vehicle(conn, payload.plate)
         d = parse_date(payload.date)
-        period = period_for_date(conn, d)
+
+        period = None
+        if payload.period_id:
+            if user.get("role") not in ADMIN_ROLES:
+                raise HTTPException(
+                    status_code=403,
+                    detail="Выбор отчёта доступен только администраторам",
+                )
+            period = conn.execute(
+                "select * from periods where id = %s", (payload.period_id,)
+            ).fetchone()
+            if not period:
+                raise HTTPException(status_code=404, detail="Отчёт не найден")
+        if period is None:
+            period = period_for_date(conn, d)
         if period is None:
             raise HTTPException(
                 status_code=400,
@@ -1219,7 +1234,7 @@ def admin_version(period_id: int, user: dict = Depends(require_admin)) -> dict:
 
 @app.get("/api/admin/vehicle-waybills")
 def admin_vehicle_waybills(plate: str, user: dict = Depends(require_admin)) -> list:
-    """Все путевые конкретной машины (для карточки водителя)."""
+    """Все путевые конкретной машины (для карточки водителя и хронологии)."""
     with db() as conn:
         return conn.execute(
             """
@@ -1236,6 +1251,29 @@ def admin_vehicle_waybills(plate: str, user: dict = Depends(require_admin)) -> l
             """,
             (plate,),
         ).fetchall()
+
+
+@app.get("/api/admin/waybill-check")
+def admin_waybill_check(period_id: int, waybill_no: str,
+                        user: dict = Depends(require_admin)) -> dict:
+    """Есть ли уже путевой с таким номером в выбранном отчёте."""
+    wb = (waybill_no or "").strip()
+    if not wb:
+        raise HTTPException(status_code=400, detail="Укажите номер путевого")
+    with db() as conn:
+        row = conn.execute(
+            "select plate from waybills "
+            "where period_id = %s and lower(trim(waybill_no)) = lower(trim(%s))",
+            (period_id, wb),
+        ).fetchone()
+        period = conn.execute(
+            "select name from periods where id = %s", (period_id,)
+        ).fetchone()
+    return {
+        "exists": bool(row),
+        "plate": (row or {}).get("plate"),
+        "period": (period or {}).get("name"),
+    }
 
 
 @app.get("/api/admin/drivers")
