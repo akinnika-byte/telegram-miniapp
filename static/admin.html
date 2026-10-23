@@ -9,190 +9,255 @@
 <title>АВТР(ПГ) — управление</title>
 <script src="https://telegram.org/js/telegram-web-app.js"></script>
 <style>
+  /* ============================================================
+     АВТР(ПГ) — управление
+     Дизайн-система: «приборная панель»
+     ============================================================ */
   :root {
-    --bg: var(--tg-theme-bg-color, #0f1420);
-    --card: var(--tg-theme-secondary-bg-color, #1b2233);
-    --text: var(--tg-theme-text-color, #e8ecf5);
-    --hint: var(--tg-theme-hint-color, #8b93a7);
-    --accent: var(--tg-theme-button-color, #4f8cff);
-    --accent-text: var(--tg-theme-button-text-color, #fff);
-    --border: rgba(128, 140, 170, 0.25);
-    --ok: #2ecc71; --bad: #ff5b5b; --warn: #ffb84d;
+    --bg: var(--tg-theme-bg-color, #0d121b);
+    --card: var(--tg-theme-secondary-bg-color, #161d29);
+    --text: var(--tg-theme-text-color, #eef2f8);
+    --hint: var(--tg-theme-hint-color, #94a0b8);
+    --line: rgba(126, 140, 170, .22);
+    --accent: #f2a63b;
+    --accent-ink: #1c1305;
+    --accent-soft: rgba(242, 166, 59, .14);
+    --link: #f5b455;
+    --ok: #3ddc97; --ok-soft: rgba(61, 220, 151, .14);
+    --bad: #ff6b6b; --bad-soft: rgba(255, 107, 107, .14);
+    --warn: #f2a63b; --warn-soft: rgba(242, 166, 59, .16);
+    --r-sm: 11px; --r-md: 16px; --r-lg: 22px;
+    --ease: cubic-bezier(.2, .8, .2, 1);
+    --mono: ui-monospace, "SF Mono", "Roboto Mono", "DejaVu Sans Mono", Menlo, monospace;
+    --shadow: 0 12px 32px rgba(0, 0, 0, .22);
   }
+  html[data-theme="light"] {
+    --bg: var(--tg-theme-bg-color, #f4f6fa);
+    --card: var(--tg-theme-secondary-bg-color, #ffffff);
+    --text: var(--tg-theme-text-color, #101828);
+    --hint: var(--tg-theme-hint-color, #667085);
+    --line: rgba(16, 24, 40, .12);
+    --link: #a36400;
+    --ok: #0e9f6e; --ok-soft: rgba(14, 159, 110, .12);
+    --bad: #d92d20; --bad-soft: rgba(217, 45, 32, .1);
+    --warn: #b26a00; --warn-soft: rgba(178, 106, 0, .12);
+    --shadow: 0 12px 28px rgba(16, 24, 40, .08);
+  }
+
   * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
   html, body { margin: 0; padding: 0; }
-  body { background: var(--bg); color: var(--text); min-height: 100vh;
-         font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; font-size: 16px; }
-  .wrap { max-width: 680px; margin: 0 auto; padding: 16px 14px 44px; }
-  .screen { display: none; } .screen.active { display: block; animation: fade .26s cubic-bezier(.2,.7,.3,1); }
-  @keyframes fade { from { opacity: 0; transform: translateY(8px);} to { opacity: 1; transform: none;} }
+  body {
+    background: var(--bg); color: var(--text); min-height: 100vh;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    font-size: 16px; line-height: 1.45;
+    -webkit-font-smoothing: antialiased; text-rendering: optimizeLegibility;
+  }
+  .wrap { max-width: 680px; margin: 0 auto; padding: 18px 14px calc(44px + env(safe-area-inset-bottom)); }
+  .screen { display: none; }
+  .screen.active { display: block; animation: fadeUp .26s var(--ease); }
+  @keyframes fadeUp { from { opacity: 0; transform: translateY(9px); } to { opacity: 1; transform: none; } }
 
-  h1 { font-size: 22px; margin: 0 0 4px; font-weight: 800; letter-spacing: -.2px; }
-  h2 { font-size: 18px; margin: 0 0 12px; font-weight: 700; }
-  .sub { color: var(--hint); font-size: 13px; margin: 0 0 16px; line-height: 1.45; }
-  .topbar { display: flex; justify-content: space-between; align-items: center; gap: 10px; margin-bottom: 14px; }
-  .link { color: var(--accent); font-size: 14px; background: none; border: none; cursor: pointer; padding: 6px; border-radius: 9px; }
+  h1 { font-size: 23px; line-height: 1.2; margin: 0 0 4px; font-weight: 800; letter-spacing: -.02em; }
+  h2 { font-size: 19px; line-height: 1.25; margin: 0 0 14px; font-weight: 750; letter-spacing: -.015em; }
+  h3 { letter-spacing: -.005em; }
+  .sub { color: var(--hint); font-size: 13px; margin: 0 0 16px; line-height: 1.5; }
+  .topbar { display: flex; justify-content: space-between; align-items: center; gap: 10px; margin-bottom: 16px; min-height: 34px; }
+  .link { color: var(--link); font-size: 14px; background: none; border: none; cursor: pointer; padding: 8px 6px; border-radius: 10px; font-weight: 600; }
+  .link:active { opacity: .65; }
 
   /* ---- Вход ---- */
   .center { text-align: center; }
-  .logo { font-size: 54px; line-height: 1; margin: 20px 0 6px; }
-  .dots { display: flex; justify-content: center; gap: 14px; margin: 20px 0 6px; }
-  .dot { width: 16px; height: 16px; border-radius: 50%; border: 2px solid var(--hint); transition: .15s; }
-  .dot.filled { background: var(--accent); border-color: var(--accent); transform: scale(1.15); }
-  .err { color: var(--bad); text-align: center; font-size: 14px; min-height: 20px; margin: 6px 0 12px; }
-  .keypad { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; max-width: 320px; margin: 0 auto; }
-  .key { height: 62px; border: none; border-radius: 16px; background: var(--card); color: var(--text);
-         font-size: 24px; font-weight: 700; cursor: pointer; transition: transform .08s, background .15s; }
-  .key:active { transform: scale(.92); background: var(--border); }
-  .key.blank { background: transparent; pointer-events: none; }
-  .powered { text-align: center; margin-top: 26px; color: var(--hint); font-size: 13px; }
-  .powered b { color: var(--accent); font-weight: 800; }
+  .brand {
+    width: 76px; height: 76px; margin: 18px auto 18px; border-radius: 22px;
+    background: linear-gradient(160deg, rgba(242,166,59,.22), rgba(242,166,59,.06));
+    border: 1.5px solid rgba(242,166,59,.35);
+    display: flex; align-items: center; justify-content: center;
+    color: var(--accent); box-shadow: 0 14px 34px rgba(242,166,59,.14);
+  }
+  .brand svg { width: 38px; height: 38px; }
+  .app-name { font-size: 13px; font-weight: 700; letter-spacing: .16em; color: var(--hint); text-transform: uppercase; }
+  .dots { display: flex; justify-content: center; gap: 16px; margin: 24px 0 4px; }
+  .dot { width: 15px; height: 15px; border-radius: 50%; border: 2px solid var(--line); transition: transform .2s var(--ease), background .16s, border-color .16s; }
+  .dot.filled { background: var(--accent); border-color: var(--accent); transform: scale(1.2); }
+  .err { color: var(--bad); text-align: center; font-size: 13.5px; min-height: 22px; margin: 8px 0 10px; font-weight: 600; }
+  .err.shake { animation: shake .38s var(--ease); }
+  @keyframes shake { 0%,100% { transform: translateX(0); } 20% { transform: translateX(-7px); } 40% { transform: translateX(6px); } 60% { transform: translateX(-4px); } 80% { transform: translateX(3px); } }
+  .keypad { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; max-width: 312px; margin: 0 auto; }
+  .key { height: 64px; border: 1px solid var(--line); border-radius: 18px; background: var(--card); color: var(--text);
+         font-family: var(--mono); font-size: 24px; font-weight: 700; cursor: pointer;
+         transition: transform .1s var(--ease), background .15s, border-color .15s; }
+  .key:active { transform: scale(.94); background: var(--accent-soft); border-color: var(--accent); }
+  .key.blank { background: transparent; border-color: transparent; pointer-events: none; }
+  .powered { text-align: center; margin-top: 28px; color: var(--hint); font-size: 12.5px; }
+  .powered b { color: var(--text); font-weight: 700; }
 
   /* ---- Меню ---- */
-  .role-chip { display: inline-flex; align-items: center; gap: 8px; background: rgba(79,140,255,.14);
-               color: var(--accent); font-size: 13px; font-weight: 700; padding: 6px 12px; border-radius: 999px; }
+  .role-chip { display: inline-flex; align-items: center; gap: 8px; background: var(--accent-soft);
+               color: var(--accent); font-size: 12.5px; font-weight: 700; padding: 6px 12px; border-radius: 999px; }
   .menu-item {
     display: flex; align-items: center; gap: 14px; width: 100%; text-align: left;
-    background: var(--card); border: none; border-radius: 18px; padding: 15px 16px;
-    color: var(--text); margin-bottom: 10px; cursor: pointer; transition: transform .09s;
+    background: var(--card); border: 1px solid var(--line); border-radius: var(--r-lg);
+    padding: 13px 15px; color: var(--text); margin-bottom: 9px; cursor: pointer;
+    transition: transform .1s var(--ease), border-color .16s;
   }
-  .menu-item:active { transform: scale(.98); }
-  .menu-item .ico { font-size: 24px; width: 42px; height: 42px; display: flex; align-items: center;
-                    justify-content: center; border-radius: 13px; background: rgba(128,140,170,.13); }
-  .menu-item .t { font-size: 16px; font-weight: 700; display: block; }
+  .menu-item:active { transform: scale(.985); border-color: var(--accent); }
+  .menu-item .ico { width: 40px; height: 40px; flex: 0 0 40px; display: flex; align-items: center; justify-content: center;
+                    border-radius: 12px; background: var(--accent-soft); color: var(--accent); }
+  .menu-item .ico svg { width: 21px; height: 21px; }
+  .menu-item .t { font-size: 16px; font-weight: 700; display: block; letter-spacing: -.01em; }
   .menu-item .d { font-size: 12.5px; color: var(--hint); margin-top: 2px; }
+  .menu-item .chev { margin-left: auto; color: var(--hint); opacity: .6; }
+  .menu-item .chev svg { width: 18px; height: 18px; display: block; }
 
   /* ---- Контент ---- */
   select {
-    width: 100%; height: 48px; border-radius: 12px; border: 1.5px solid var(--border);
-    background: var(--card); color: var(--text); font-size: 16px; padding: 0 12px; outline: none; margin-bottom: 14px;
+    width: 100%; height: 50px; border-radius: var(--r-md); border: 1.5px solid var(--line);
+    background: var(--card); color: var(--text); font-size: 15.5px; padding: 0 12px; outline: none;
+    margin-bottom: 12px; appearance: none; -webkit-appearance: none;
+    background-image: linear-gradient(45deg, transparent 50%, var(--hint) 50%), linear-gradient(135deg, var(--hint) 50%, transparent 50%);
+    background-position: calc(100% - 19px) 22px, calc(100% - 14px) 22px;
+    background-size: 5px 5px, 5px 5px; background-repeat: no-repeat;
   }
-  .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(105px, 1fr)); gap: 10px; margin-bottom: 14px; }
-  .stat { background: var(--card); border-radius: 14px; padding: 12px 14px; }
-  .stat .n { font-size: 22px; font-weight: 800; font-variant-numeric: tabular-nums; }
-  .stat .t { font-size: 12px; color: var(--hint); margin-top: 2px; }
-  .fuel-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
-  .fuel-grid > div { background: rgba(128,140,170,.10); border-radius: 12px; padding: 12px; }
-  .fg-t { font-size: 12px; font-weight: 700; color: var(--hint); letter-spacing: .3px; margin-bottom: 8px; }
-  .fg-r { display: flex; justify-content: space-between; gap: 8px; font-size: 14px; padding: 3px 0; }
-  .fg-r b { font-variant-numeric: tabular-nums; }
-  .fg-total { margin-top: 12px; padding-top: 10px; border-top: 1px solid var(--border);
-              font-size: 13px; color: var(--hint); }
+  select:focus { border-color: var(--accent); }
+  .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(105px, 1fr)); gap: 10px; margin-bottom: 12px; }
+  .stat { background: var(--card); border: 1px solid var(--line); border-radius: var(--r-md); padding: 12px 14px; }
+  .stat .n { font-size: 23px; font-weight: 800; font-variant-numeric: tabular-nums; letter-spacing: -.02em; }
+  .stat .t { font-size: 11.5px; color: var(--hint); margin-top: 2px; }
+  .fuel-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .fuel-grid > div { background: rgba(126, 140, 170, .09); border-radius: var(--r-sm); padding: 12px; }
+  .fg-t { font-size: 12px; font-weight: 650; color: var(--hint); margin-bottom: 8px; }
+  .fg-r { display: flex; justify-content: space-between; gap: 8px; font-size: 13.5px; padding: 3px 0; }
+  .fg-r b { font-variant-numeric: tabular-nums; font-family: var(--mono); }
+  .fg-total { margin-top: 12px; padding-top: 10px; border-top: 1px solid var(--line); font-size: 12.5px; color: var(--hint); }
 
-  .card { background: var(--card); border-radius: 16px; margin-bottom: 10px; overflow: hidden; }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: var(--r-lg); margin-bottom: 10px; overflow: hidden; }
   .row { display: flex; justify-content: space-between; align-items: center; gap: 10px; padding: 14px 16px; cursor: pointer; }
-  .row .plate { font-weight: 800; font-size: 17px; letter-spacing: .5px; }
+  .row .plate { font-weight: 800; font-size: 17px; font-family: var(--mono); letter-spacing: .06em; }
   .row .meta { font-size: 12px; color: var(--hint); margin-top: 3px; }
   .row .right { text-align: right; font-size: 13px; font-variant-numeric: tabular-nums; }
-  .badge { display: inline-block; font-size: 11px; font-weight: 700; padding: 3px 8px; border-radius: 8px; }
-  .badge.ok { background: rgba(46,204,113,.16); color: var(--ok); }
-  .badge.bad { background: rgba(255,91,91,.16); color: var(--bad); }
-  .badge.warn { background: rgba(255,184,77,.16); color: var(--warn); }
-  .detail { display: none; border-top: 1px solid var(--border); }
-  .detail.open { display: block; }
-  .item { padding: 12px 16px; border-bottom: 1px solid var(--border); font-size: 14px; }
+  .badge { display: inline-block; font-size: 10.5px; font-weight: 700; padding: 3px 8px; border-radius: 7px; letter-spacing: .02em; }
+  .badge.ok { background: var(--ok-soft); color: var(--ok); }
+  .badge.bad { background: var(--bad-soft); color: var(--bad); }
+  .badge.warn { background: var(--warn-soft); color: var(--warn); }
+  .detail { display: none; border-top: 1px solid var(--line); }
+  .detail.open { display: block; animation: fadeUp .2s var(--ease); }
+  .item { padding: 12px 16px; border-bottom: 1px solid var(--line); font-size: 14px; }
   .item:last-child { border-bottom: none; }
-  .item .head { display: flex; justify-content: space-between; margin-bottom: 6px; }
+  .item .head { display: flex; justify-content: space-between; gap: 8px; margin-bottom: 6px; }
   .kv { display: grid; grid-template-columns: repeat(2, 1fr); gap: 3px 14px; color: var(--hint); font-size: 13px; }
-  .kv b { color: var(--text); font-weight: 600; }
+  .kv b { color: var(--text); font-weight: 600; font-variant-numeric: tabular-nums; }
 
-  .field { margin-bottom: 12px; }
-  .field label { display: block; font-size: 13px; color: var(--hint); margin-bottom: 5px; }
-  .field input { width: 100%; height: 48px; border-radius: 12px; border: 1.5px solid var(--border);
-                 background: var(--bg); color: var(--text); font-size: 16px; padding: 0 14px; outline: none; }
-  .field input:focus { border-color: var(--accent); }
-  .field select { width: 100%; height: 48px; border-radius: 12px; border: 1.5px solid var(--border);
-                  background: var(--bg); color: var(--text); font-size: 16px; padding: 0 12px;
+  .field { margin-bottom: 13px; }
+  .field label { display: block; font-size: 12.5px; color: var(--hint); margin-bottom: 6px; }
+  .field input { width: 100%; min-width: 0; height: 50px; border-radius: var(--r-md); border: 1.5px solid var(--line);
+                 background: var(--bg); color: var(--text); font-size: 16px; padding: 0 14px; outline: none;
+                 transition: border-color .16s, box-shadow .16s; }
+  .field input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+  .field select { width: 100%; height: 50px; border-radius: var(--r-md); border: 1.5px solid var(--line);
+                  background-color: var(--bg); color: var(--text); font-size: 16px; padding: 0 12px;
                   outline: none; margin: 0; }
   .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 0 12px; }
-  .group-title { font-size: 12px; font-weight: 700; color: var(--hint); text-transform: uppercase;
-                 letter-spacing: .4px; margin: 0 0 8px; }
+  .group-title { font-size: 12px; font-weight: 650; color: var(--hint); margin: 0 0 8px; }
 
-  .btn { width: 100%; height: 52px; border: none; border-radius: 15px; font-size: 16px; font-weight: 700; cursor: pointer; }
-  .btn:active { transform: scale(.98); }
-  .btn.primary { background: var(--accent); color: var(--accent-text); }
-  .btn.ghost { background: transparent; color: var(--accent); border: 1.5px solid var(--accent); }
+  .btn { width: 100%; height: 54px; border: none; border-radius: var(--r-md); font-size: 16px; font-weight: 700;
+         letter-spacing: -.01em; cursor: pointer; transition: transform .1s var(--ease), opacity .16s; }
+  .btn:active { transform: scale(.985); }
+  .btn.primary { background: var(--accent); color: var(--accent-ink); box-shadow: 0 12px 26px rgba(242, 166, 59, .22); }
+  .btn.ghost { background: transparent; color: var(--link); border: 1.5px solid var(--line); }
+  .btn:disabled { opacity: .55; box-shadow: none; }
   .btn + .btn { margin-top: 10px; }
 
-  .chips { display: flex; gap: 8px; overflow-x: auto; margin-bottom: 14px; padding-bottom: 2px; }
-  .chip { flex: 0 0 auto; padding: 8px 14px; border-radius: 999px; border: 1.5px solid var(--border);
-          background: transparent; color: var(--hint); font-size: 13px; font-weight: 600; cursor: pointer; }
-  .chip.active { background: var(--accent); color: var(--accent-text); border-color: var(--accent); }
+  .chips { display: flex; gap: 8px; overflow-x: auto; margin-bottom: 12px; padding-bottom: 2px; scrollbar-width: none; }
+  .chips::-webkit-scrollbar { display: none; }
+  .chip { flex: 0 0 auto; padding: 8px 14px; border-radius: 999px; border: 1.5px solid var(--line);
+          background: transparent; color: var(--hint); font-size: 13px; font-weight: 600; cursor: pointer;
+          transition: background .16s, color .16s, border-color .16s; }
+  .chip.active { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
 
   /* ---- Хронология машины ---- */
-  .timeline { display: flex; align-items: stretch; overflow-x: auto; padding: 10px 2px 18px; }
-  .tnode { position: relative; flex: 0 0 200px; background: var(--card); border-radius: 14px;
-           padding: 12px 14px; margin-right: 30px; }
+  .timeline { display: flex; align-items: stretch; overflow-x: auto; padding: 10px 2px 18px; scrollbar-width: none; }
+  .timeline::-webkit-scrollbar { display: none; }
+  .tnode { position: relative; flex: 0 0 200px; background: var(--card); border: 1px solid var(--line);
+           border-radius: var(--r-md); padding: 12px 14px; margin-right: 30px; }
   .tnode:last-child { margin-right: 0; }
-  .tnode::after {
-    content: ""; position: absolute; right: -24px; top: 50%; width: 18px; height: 2px;
-    background: var(--border); transform: translateY(-50%);
-  }
+  .tnode::after { content: ""; position: absolute; right: -24px; top: 50%; width: 18px; height: 2px;
+                  background: var(--line); transform: translateY(-50%); }
   .tnode:last-child::after { display: none; }
-  .tnode .t-n { font-weight: 800; font-size: 16px; }
+  .tnode .t-n { font-weight: 800; font-size: 15px; font-family: var(--mono); }
   .tnode .t-d { font-size: 11px; color: var(--hint); margin: 2px 0 8px; }
   .tnode .t-r { display: flex; justify-content: space-between; gap: 8px; font-size: 13px; padding: 2px 0; }
-  .tnode .t-r b { font-variant-numeric: tabular-nums; }
-  .tnode.bad { border: 1px solid var(--bad); }
-  .tnode.corr { border: 1px solid var(--warn); }
-  .act { padding: 12px 14px; border-bottom: 1px solid var(--border); font-size: 13px; }
+  .tnode .t-r b { font-variant-numeric: tabular-nums; font-family: var(--mono); }
+  .tnode.bad { border-color: rgba(255, 107, 107, .5); }
+  .tnode.corr { border-color: rgba(242, 166, 59, .5); }
+  .act { padding: 12px 14px; border-bottom: 1px solid var(--line); font-size: 13px; }
   .act:last-child { border-bottom: none; }
   .act .a { display: flex; justify-content: space-between; gap: 10px; }
   .act .who { color: var(--hint); font-size: 12px; margin-top: 3px; }
-  .spin { width: 26px; height: 26px; border: 3px solid var(--border); border-top-color: var(--accent);
-          border-radius: 50%; margin: 40px auto; animation: sp 1s linear infinite; }
+  .spin { width: 24px; height: 24px; border: 2.5px solid var(--line); border-top-color: var(--accent);
+          border-radius: 50%; margin: 40px auto; animation: sp .9s linear infinite; }
   @keyframes sp { to { transform: rotate(360deg); } }
-  .empty { text-align: center; color: var(--hint); padding: 30px 10px; font-size: 14px; }
-  .toast { position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%) translateY(140%);
-           background: #111; color: #fff; padding: 13px 20px; border-radius: 14px; font-size: 14px;
-           transition: transform .35s; max-width: 90%; text-align: center; z-index: 50; }
+  .empty { text-align: center; color: var(--hint); padding: 34px 12px; font-size: 14px; line-height: 1.55; }
+  .toast { position: fixed; left: 50%; bottom: calc(22px + env(safe-area-inset-bottom));
+           transform: translateX(-50%) translateY(150%); z-index: 950;
+           background: #101828; color: #fff; padding: 13px 20px; border-radius: 14px; font-size: 14px;
+           font-weight: 500; max-width: 88%; text-align: center; box-shadow: 0 16px 40px rgba(0, 0, 0, .35);
+           transition: transform .38s var(--ease); }
   .toast.show { transform: translateX(-50%) translateY(0); }
 
   /* ---- Страница расчёта ---- */
-  .status { border-radius: 18px; padding: 18px 16px; text-align: center; margin-bottom: 14px; }
-  .status .big { font-size: 20px; font-weight: 800; margin-bottom: 4px; }
-  .status .small { font-size: 13px; opacity: .9; }
-  .status.ok { background: rgba(46, 204, 113, .15); color: var(--ok); }
-  .status.bad { background: rgba(255, 91, 91, .15); color: var(--bad); }
-  .cmp-head, .cmp-row { display: grid; grid-template-columns: 1.4fr 1fr 1fr; gap: 8px; align-items: center; }
-  .cmp-head { font-size: 11px; color: var(--hint); font-weight: 700; letter-spacing: .3px;
-              padding-bottom: 8px; border-bottom: 1px solid var(--border); }
+  .status { display: flex; align-items: center; gap: 14px; text-align: left; border-radius: var(--r-lg);
+            padding: 16px 18px; margin-bottom: 12px; border: 1px solid transparent; }
+  .status .big { font-size: 18px; font-weight: 800; margin-bottom: 2px; letter-spacing: -.01em; }
+  .status .small { font-size: 13px; opacity: .85; line-height: 1.4; }
+  .status .mark { width: 42px; height: 42px; flex: 0 0 42px; border-radius: 50%; display: flex;
+                  align-items: center; justify-content: center; font-size: 20px; font-weight: 800; }
+  .status.ok { background: var(--ok-soft); color: var(--ok); border-color: rgba(61, 220, 151, .22); }
+  .status.bad { background: var(--bad-soft); color: var(--bad); border-color: rgba(255, 107, 107, .22); }
+  .status.ok .mark { background: rgba(61, 220, 151, .16); }
+  .status.bad .mark { background: rgba(255, 107, 107, .16); }
+  .cmp-head, .cmp-row { display: grid; grid-template-columns: 1.25fr .95fr .95fr; gap: 8px; align-items: center; }
+  .cmp-head { font-size: 12px; color: var(--hint); font-weight: 600; padding-bottom: 9px; border-bottom: 1px solid var(--line); }
   .cmp-head span:not(:first-child), .cmp-row .a, .cmp-row .b { text-align: right; }
-  .cmp-row { padding: 11px 0; border-bottom: 1px solid var(--border); font-size: 14px;
-             font-variant-numeric: tabular-nums; }
+  .cmp-row { padding: 11px 0; border-bottom: 1px solid var(--line); font-size: 14px; font-variant-numeric: tabular-nums; }
   .cmp-row:last-child { border-bottom: none; }
   .cmp-row .k { color: var(--hint); }
-  .cmp-row .a { font-weight: 800; }
-  .cmp-row .b { color: var(--hint); }
+  .cmp-row .a { font-weight: 800; font-family: var(--mono); }
+  .cmp-row .b { color: var(--hint); font-family: var(--mono); }
   .cmp-row.good .a { color: var(--ok); }
   .cmp-row.bad .a { color: var(--bad); }
   .cmp-row.bad .b { color: var(--ok); font-weight: 700; }
-  .mismatch { border: 1.5px solid var(--bad); border-radius: 16px; padding: 16px;
-              margin-bottom: 14px; font-size: 14px; line-height: 1.55; }
+  .mismatch { border: 1.5px solid rgba(255, 107, 107, .45); background: var(--bad-soft); border-radius: var(--r-lg);
+              padding: 16px; margin-bottom: 12px; font-size: 14px; line-height: 1.55; }
   .mismatch .title { color: var(--bad); font-weight: 800; margin-bottom: 8px; }
   .mismatch ul { margin: 6px 0 10px; padding-left: 20px; }
   .mismatch .calc { margin-top: 6px; line-height: 1.7; }
-  .mismatch .calc b { color: var(--accent); font-size: 16px; }
+  .mismatch .calc b { color: var(--text); font-size: 16px; font-family: var(--mono); }
 
   /* Колесо быстрых действий (долгое нажатие на машину) */
   .wheel { position: fixed; inset: 0; z-index: 900; }
   .wheel[hidden] { display: none; }
-  .wheel-back { position: absolute; inset: 0; background: rgba(6, 9, 16, .55); animation: wfade .16s ease-out; }
+  .wheel-back { position: absolute; inset: 0; background: rgba(6, 9, 16, .58); animation: wfade .16s ease-out; backdrop-filter: blur(2px); }
   [data-toggle] { -webkit-touch-callout: none; -webkit-user-select: none; user-select: none; }
   .wheel-item { position: absolute; width: 88px; height: 88px; margin: -44px 0 0 -44px;
-                border: 1.5px solid rgba(79,140,255,.5); border-radius: 50%;
+                border: 1px solid var(--line); border-radius: 50%;
                 background: var(--card); color: var(--text); cursor: pointer;
                 display: flex; flex-direction: column; align-items: center; justify-content: center;
-                gap: 3px; font-size: 12px; font-weight: 600; text-align: center; padding: 6px;
-                box-shadow: 0 10px 26px rgba(0,0,0,.45); animation: wpop .18s ease-out; }
-  .wheel-item .ico { font-size: 22px; line-height: 1; }
-  .wheel-dot { position: absolute; width: 54px; height: 54px; margin: -27px 0 0 -27px;
-               border-radius: 50%; background: var(--accent); color: var(--accent-text);
+                gap: 4px; font-size: 11.5px; font-weight: 650; text-align: center; padding: 6px;
+                box-shadow: 0 14px 34px rgba(0, 0, 0, .4); animation: wpop .18s var(--ease); }
+  .wheel-item .ico { font-size: 22px; line-height: 1; color: var(--accent); }
+  .wheel-item .ico svg { width: 22px; height: 22px; display: block; }
+  .wheel-dot { position: absolute; width: 56px; height: 56px; margin: -28px 0 0 -28px;
+               border-radius: 50%; background: var(--accent); color: var(--accent-ink);
                display: flex; align-items: center; justify-content: center;
-               font-weight: 800; font-size: 13px; letter-spacing: .3px;
-               box-shadow: 0 0 0 6px rgba(79,140,255,.18); }
+               font-weight: 800; font-size: 13px; font-family: var(--mono); letter-spacing: .04em;
+               box-shadow: 0 0 0 7px rgba(242, 166, 59, .16); }
   @keyframes wpop { from { transform: scale(.4); opacity: 0 } to { transform: scale(1); opacity: 1 } }
   @keyframes wfade { from { opacity: 0 } to { opacity: 1 } }
+
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after { animation-duration: .001ms !important; transition-duration: .001ms !important; }
+  }
+
 </style>
 </head>
 <body>
@@ -229,9 +294,12 @@ window.addEventListener("unhandledrejection", function (ev) {
   <!-- Вход (всегда при открытии) -->
   <div class="screen" id="scr-login">
     <div class="center">
-      <div class="logo">🛠</div>
-      <h1>АВТР(ПГ)</h1>
-      <p class="sub">Введите код доступа</p>
+      <div class="brand">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h9"/><path d="M18 7h2"/><path d="M4 17h2"/><path d="M12 17h8"/><circle cx="15.5" cy="7" r="2.4"/><circle cx="8.5" cy="17" r="2.4"/></svg>
+      </div>
+      <div class="app-name">АВТР · ПГ</div>
+      <h1 style="margin-top:8px">Управление</h1>
+      <p class="sub">Введите код доступа — четыре цифры</p>
     </div>
     <div class="dots" id="dots"><div class="dot"></div><div class="dot"></div><div class="dot"></div><div class="dot"></div></div>
     <div class="err" id="err"></div>
@@ -257,20 +325,20 @@ window.addEventListener("unhandledrejection", function (ev) {
       </div>
       <button class="link" id="logout">Выйти</button>
     </div>
-    <button class="menu-item" data-screen="scr-report"><span class="ico">📊</span><span><span class="t">Отчёт</span><span class="d">Путевые по машинам за период</span></span></button>
-    <button class="menu-item" data-screen="scr-summary"><span class="ico">📋</span><span><span class="t">Сводка</span><span class="d">Суммы по каждой машине</span></span></button>
-    <button class="menu-item" data-screen="scr-activity"><span class="ico">🕘</span><span><span class="t">Активность</span><span class="d">Кто и что делал</span></span></button>
-    <button class="menu-item" data-screen="scr-vehicles"><span class="ico">🚚</span><span><span class="t">Машины</span><span class="d">Данные, документы, водители</span></span></button>
-    <button class="menu-item" data-screen="scr-drivers"><span class="ico">👥</span><span><span class="t">Водители</span><span class="d">Водительский состав</span></span></button>
-    <button class="menu-item" data-screen="scr-norms"><span class="ico">⛽</span><span><span class="t">Нормы расхода</span><span class="d">Топливо, моточасы, баки</span></span></button>
+    <button class="menu-item" data-screen="scr-report"><span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 20V11M12 20V5M19 20v-7"/><path d="M3 20h18"/></svg></span><span><span class="t">Отчёт</span><span class="d">Путевые по машинам за период</span></span><span class="chev"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l6 6-6 6"/></svg></span></button>
+    <button class="menu-item" data-screen="scr-summary"><span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="4.5" y="4.5" width="15" height="16" rx="2.5"/><path d="M9 3.5h6v3H9z"/><path d="M8.5 11h7"/><path d="M8.5 15h5"/></svg></span><span><span class="t">Сводка</span><span class="d">Суммы по каждой машине</span></span><span class="chev"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l6 6-6 6"/></svg></span></button>
+    <button class="menu-item" data-screen="scr-activity"><span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/></svg></span><span><span class="t">Активность</span><span class="d">Кто и что делал</span></span><span class="chev"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l6 6-6 6"/></svg></span></button>
+    <button class="menu-item" data-screen="scr-vehicles"><span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7h10.5v9H3z"/><path d="M13.5 10.5H18l3 3v3h-7.5z"/><circle cx="7.5" cy="17.6" r="1.5"/><circle cx="17.4" cy="17.6" r="1.5"/></svg></span><span><span class="t">Машины</span><span class="d">Данные, документы, водители</span></span><span class="chev"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l6 6-6 6"/></svg></span></button>
+    <button class="menu-item" data-screen="scr-drivers"><span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="8.5" r="3"/><path d="M3.5 19.5c.9-3.1 3.1-4.8 5.5-4.8s4.6 1.7 5.5 4.8"/><path d="M16 5.6a3 3 0 0 1 0 5.8"/><path d="M17.5 14.9c1.7.6 2.8 2.1 3.3 4.1"/></svg></span><span><span class="t">Водители</span><span class="d">Водительский состав</span></span><span class="chev"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l6 6-6 6"/></svg></span></button>
+    <button class="menu-item" data-screen="scr-norms"><span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3.8c3.3 3.7 5.1 6.4 5.1 8.9a5.1 5.1 0 0 1-10.2 0c0-2.5 1.8-5.2 5.1-8.9z"/></svg></span><span><span class="t">Нормы расхода</span><span class="d">Топливо, моточасы, баки</span></span><span class="chev"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l6 6-6 6"/></svg></span></button>
   </div>
 
   <!-- Отчёт -->
   <div class="screen" id="scr-report">
     <div class="topbar"><button class="link" data-back>← Меню</button><h2 style="margin:0">Отчёт</h2></div>
     <select id="sel-report"></select>
-    <button class="btn primary" id="wb-add" style="margin-bottom:12px">➕ Добавить путевой</button>
-    <button class="btn ghost" id="wb-export" style="margin-bottom:12px">📥 Расшифровка (Excel)</button>
+    <button class="btn primary" id="wb-add" style="margin-bottom:10px">Добавить путевой</button>
+    <button class="btn ghost" id="wb-export" style="margin-bottom:12px">Расшифровка · Excel</button>
     <div id="report-body"><div class="spin"></div></div>
   </div>
 
@@ -291,7 +359,7 @@ window.addEventListener("unhandledrejection", function (ev) {
   <!-- Машины -->
   <div class="screen" id="scr-vehicles">
     <div class="topbar"><button class="link" data-back>← Меню</button><h2 style="margin:0">Машины</h2></div>
-    <button class="btn primary" id="veh-add" style="margin-bottom:12px">➕ Добавить машину</button>
+    <button class="btn primary" id="veh-add" style="margin-bottom:12px">Добавить машину</button>
     <div id="vehicles-body"></div>
   </div>
 
@@ -345,16 +413,19 @@ window.addEventListener("unhandledrejection", function (ev) {
   <!-- Страница расчёта путевого -->
   <div class="screen" id="scr-wb-result">
     <div class="status" id="wbr-status">
-      <div class="big" id="wbr-big">—</div>
-      <div class="small" id="wbr-small">—</div>
+      <div class="mark" id="wbr-mark">•</div>
+      <div>
+        <div class="big" id="wbr-big">—</div>
+        <div class="small" id="wbr-small">—</div>
+      </div>
     </div>
     <div class="card">
-      <h3 style="margin:0 0 8px;font-size:12px;color:var(--hint);letter-spacing:.4px">СВЕРКА ДАННЫХ</h3>
+      <h3>Сверка данных</h3>
       <div class="cmp-head"><span>Показатель</span><span>Ваши данные</span><span>По расчёту</span></div>
       <div id="wbr-cmp"></div>
     </div>
     <div class="card">
-      <h3 style="margin:0 0 8px;font-size:12px;color:var(--hint);letter-spacing:.4px">ПРАВИЛЬНЫЙ РАСЧЁТ ТОПЛИВА</h3>
+      <h3>Правильный расчёт топлива</h3>
       <div class="row"><span class="l">P1 (без груза, −15%)</span><span class="v" id="wbr-p1">—</span></div>
       <div class="row"><span class="l">P2 (с грузом)</span><span class="v" id="wbr-p2">—</span></div>
       <div class="row" id="wbr-row-h"><span class="l">H (моточасы)</span><span class="v" id="wbr-h">—</span></div>
@@ -362,7 +433,7 @@ window.addEventListener("unhandledrejection", function (ev) {
     </div>
     <div id="wbr-mismatch"></div>
     <button class="btn primary" id="wbr-save">Сохранить</button>
-    <button class="btn ghost" id="wbr-fix" style="margin-top:10px">✏️ Исправить</button>
+    <button class="btn ghost" id="wbr-fix" style="margin-top:10px">Исправить</button>
     <button class="btn ghost" id="wbr-done" style="margin-top:10px">Готово</button>
   </div>
 
@@ -394,6 +465,14 @@ window.addEventListener("unhandledrejection", function (ev) {
 
 <script>
 const tg = window.Telegram && window.Telegram.WebApp ? window.Telegram.WebApp : null;
+(function () {
+  var dark = true;
+  try {
+    if (tg && tg.colorScheme) dark = tg.colorScheme === "dark";
+    else if (window.matchMedia) dark = window.matchMedia("(prefers-color-scheme: dark)").matches;
+  } catch (e) {}
+  document.documentElement.setAttribute("data-theme", dark ? "dark" : "light");
+})();
 const IN_TELEGRAM = !!(tg && tg.initData);
 let session = null, periods = [], currentPeriod = null, pin = "";
 let cache = {}, lastSig = null, editingWb = null;
@@ -614,7 +693,7 @@ function renderReport() {
        <div class="stat"><div class="n" style="color:${data.total_bad ? "var(--bad)" : "var(--ok)"}">${data.total_bad}</div><div class="t">С расхождением</div></div>
      </div>
      <div class="card" style="padding:14px 16px">
-       <h3 style="margin:0 0 10px;font-size:12px;color:var(--hint);letter-spacing:.4px">ТОПЛИВО ЗА ПЕРИОД</h3>
+       <h3>Топливо за период</h3>
        <div class="fuel-grid">
          <div><div class="fg-t">Дизель</div>
            <div class="fg-r"><span>Получено</span><b>${nf(t.diesel.received)} л</b></div>
@@ -652,8 +731,8 @@ function renderReport() {
             </div>
             ${it.author ? `<div class="meta" style="margin-top:6px">Внёс: ${esc(it.author)}</div>` : ""}
             <div style="display:flex;gap:8px;padding-top:8px;flex-wrap:wrap">
-              <button class="link" data-wb="${it.id}" style="padding:0">✏️ Изменить</button>
-              <button class="link" data-del="${it.id}" style="padding:0;color:var(--bad)">🗑 Удалить</button>
+              <button class="link" data-wb="${it.id}" style="padding:0">Изменить</button>
+              <button class="link" data-del="${it.id}" style="padding:0;color:var(--bad)">Удалить</button>
             </div>
           </div>`).join("")}</div>
       </div>`).join("");
@@ -776,13 +855,13 @@ function bindToggles(box) {
 let suppressClickUntil = 0;
 
 const WHEEL_ACTIONS = [
-  { icon: "🚚", label: "К машине", run: (plate) => {
+  { icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7h10.5v9H3z"/><path d="M13.5 10.5H18l3 3v3h-7.5z"/><circle cx="7.5" cy="17.6" r="1.5"/><circle cx="17.4" cy="17.6" r="1.5"/></svg>', label: "К машине", run: (plate) => {
       const v = (cache.vehicles || []).find(x => String(x.plate) === plate);
       if (!v) return toast("Машина не найдена");
       openVehicleForm(v, "scr-report");
     } },
-  { icon: "👤", label: "К водителю", run: (plate) => openDriverCard(plate, "scr-report") },
-  { icon: "🕘", label: "Остатки", run: (plate) => openChrono(plate, "scr-report") },
+  { icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="3.2"/><path d="M5.5 20c1-3.4 3.6-5.2 6.5-5.2s5.5 1.8 6.5 5.2"/></svg>', label: "К водителю", run: (plate) => openDriverCard(plate, "scr-report") },
+  { icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/></svg>', label: "Остатки", run: (plate) => openChrono(plate, "scr-report") },
 ];
 
 function closeWheel() {
@@ -920,7 +999,7 @@ function renderVehicles(box, mode) {
         <div class="right" style="color:var(--accent)">изменить ›</div>
       </div>
       <div style="padding:0 16px 12px">
-        <button class="link" data-chrono="${esc(v.plate)}" style="padding:0">🕘 Хронология</button>
+        <button class="link" data-chrono="${esc(v.plate)}" style="padding:0">Хронология</button>
       </div></div>`;
   }).join("");
   box.querySelectorAll("[data-plate]").forEach(r => r.addEventListener("click", () => {
@@ -1287,11 +1366,12 @@ function renderWbResult(d, payload, saved) {
   const bad = !d.is_ok;
   const st = $("wbr-status");
   st.className = "status " + (bad ? "bad" : "ok");
+  $("wbr-mark").textContent = bad ? "!" : "✓";
   if (saved) {
-    $("wbr-big").textContent = bad ? "✔ Сохранено (с расхождениями)" : "✔ Сохранено";
+    $("wbr-big").textContent = bad ? "Сохранено с расхождениями" : "Сохранено";
     $("wbr-small").textContent = `Путевой №${payload.waybill_no} сохранён`;
   } else {
-    $("wbr-big").textContent = bad ? "⚠ Найдены расхождения" : "✔ Данные корректны";
+    $("wbr-big").textContent = bad ? "Найдены расхождения" : "Данные корректны";
     $("wbr-small").textContent = bad
       ? "Исправьте данные или сохраните как есть"
       : "Можно сохранять";

@@ -9,178 +9,250 @@
 <title>АВТР(ПГ)</title>
 <script src="https://telegram.org/js/telegram-web-app.js"></script>
 <style>
+  /* ============================================================
+     АВТР(ПГ) — водитель
+     Дизайн-система: «приборная панель»
+     ============================================================ */
   :root {
-    --bg: var(--tg-theme-bg-color, #0f1420);
-    --card: var(--tg-theme-secondary-bg-color, #1b2233);
-    --text: var(--tg-theme-text-color, #e8ecf5);
-    --hint: var(--tg-theme-hint-color, #8b93a7);
-    --accent: var(--tg-theme-button-color, #4f8cff);
-    --accent-text: var(--tg-theme-button-text-color, #ffffff);
-    --border: rgba(128, 140, 170, 0.25);
-    --ok: #2ecc71; --ok-bg: rgba(46, 204, 113, 0.14);
-    --bad: #ff5b5b; --bad-bg: rgba(255, 91, 91, 0.14);
-    --warn: #ffb84d;
+    --bg: var(--tg-theme-bg-color, #0d121b);
+    --card: var(--tg-theme-secondary-bg-color, #161d29);
+    --text: var(--tg-theme-text-color, #eef2f8);
+    --hint: var(--tg-theme-hint-color, #94a0b8);
+    --line: rgba(126, 140, 170, .22);
+    --accent: #f2a63b;
+    --accent-ink: #1c1305;
+    --accent-soft: rgba(242, 166, 59, .14);
+    --link: #f5b455;
+    --ok: #3ddc97; --ok-soft: rgba(61, 220, 151, .14);
+    --bad: #ff6b6b; --bad-soft: rgba(255, 107, 107, .14);
+    --warn: #f2a63b; --warn-soft: rgba(242, 166, 59, .16);
+    --r-sm: 11px; --r-md: 16px; --r-lg: 22px;
+    --ease: cubic-bezier(.2, .8, .2, 1);
+    --mono: ui-monospace, "SF Mono", "Roboto Mono", "DejaVu Sans Mono", Menlo, monospace;
+    --shadow: 0 12px 32px rgba(0, 0, 0, .22);
   }
+  html[data-theme="light"] {
+    --bg: var(--tg-theme-bg-color, #f4f6fa);
+    --card: var(--tg-theme-secondary-bg-color, #ffffff);
+    --text: var(--tg-theme-text-color, #101828);
+    --hint: var(--tg-theme-hint-color, #667085);
+    --line: rgba(16, 24, 40, .12);
+    --link: #a36400;
+    --ok: #0e9f6e; --ok-soft: rgba(14, 159, 110, .12);
+    --bad: #d92d20; --bad-soft: rgba(217, 45, 32, .1);
+    --warn: #b26a00; --warn-soft: rgba(178, 106, 0, .12);
+    --shadow: 0 12px 28px rgba(16, 24, 40, .08);
+  }
+
   * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
   html, body { margin: 0; padding: 0; }
   body {
     background: var(--bg); color: var(--text); min-height: 100vh;
-    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; font-size: 16px;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    font-size: 16px; line-height: 1.45;
+    -webkit-font-smoothing: antialiased; text-rendering: optimizeLegibility;
   }
-  .screen { display: none; padding: 20px 16px 40px; max-width: 520px; margin: 0 auto; }
-  .screen.active { display: block; animation: fade .28s cubic-bezier(.2,.7,.3,1); }
-  @keyframes fade { from { opacity: 0; transform: translateY(10px);} to { opacity: 1; transform: none;} }
 
-  h1 { font-size: 22px; margin: 0 0 6px; font-weight: 800; letter-spacing: -.2px; }
-  h2 { font-size: 18px; margin: 0 0 12px; font-weight: 700; }
-  .sub { color: var(--hint); font-size: 14px; margin: 0 0 20px; line-height: 1.45; }
+  .screen { display: none; padding: 22px 16px 40px; max-width: 540px; margin: 0 auto; }
+  .screen.active { display: block; animation: fadeUp .26s var(--ease); }
+  @keyframes fadeUp { from { opacity: 0; transform: translateY(9px); } to { opacity: 1; transform: none; } }
+
+  h1 { font-size: 23px; line-height: 1.2; margin: 0 0 6px; font-weight: 800; letter-spacing: -.02em; }
+  h2 { font-size: 19px; line-height: 1.25; margin: 0 0 14px; font-weight: 750; letter-spacing: -.015em; }
+  .sub { color: var(--hint); font-size: 14px; margin: 0 0 20px; line-height: 1.5; }
   .center { text-align: center; }
-  .logo { font-size: 54px; line-height: 1; margin: 20px 0 6px; }
   .muted { color: var(--hint); font-size: 14px; line-height: 1.5; }
 
-  /* ---- Клавиатура кода ---- */
-  .dots { display: flex; justify-content: center; gap: 14px; margin: 22px 0 6px; }
-  .dot { width: 16px; height: 16px; border-radius: 50%; border: 2px solid var(--hint);
-         transition: transform .18s cubic-bezier(.2,1.6,.4,1), background .15s, border-color .15s; }
-  .dot.filled { background: var(--accent); border-color: var(--accent); transform: scale(1.18); }
-  .pin-error { color: var(--bad); font-size: 14px; min-height: 20px; margin: 6px 0 10px; }
-  .keypad { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; max-width: 320px; margin: 0 auto; }
-  .key { height: 62px; border: none; border-radius: 16px; background: var(--card); color: var(--text);
-         font-size: 24px; font-weight: 700; cursor: pointer;
-         transition: transform .08s, background .15s; }
-  .key:active { transform: scale(.92); background: var(--border); }
-  .key.blank { background: transparent; pointer-events: none; }
-  .powered { text-align: center; margin-top: 28px; color: var(--hint); font-size: 13px; }
-  .powered b { color: var(--accent); font-weight: 800; }
+  /* ---- Знак приложения ---- */
+  .brand {
+    width: 76px; height: 76px; margin: 18px auto 18px; border-radius: 22px;
+    background: linear-gradient(160deg, rgba(242,166,59,.22), rgba(242,166,59,.06));
+    border: 1.5px solid rgba(242,166,59,.35);
+    display: flex; align-items: center; justify-content: center;
+    color: var(--accent); box-shadow: 0 14px 34px rgba(242,166,59,.14);
+  }
+  .brand svg { width: 38px; height: 38px; }
+  .brand.small { width: 54px; height: 54px; border-radius: 16px; margin: 0 0 10px; }
+  .brand.small svg { width: 26px; height: 26px; }
+  .app-name { font-size: 13px; font-weight: 700; letter-spacing: .16em; color: var(--hint); text-transform: uppercase; }
 
-  /* ---- Анимация проверки кода ---- */
-  .checking { text-align: center; margin-top: 90px; }
-  .ring { width: 84px; height: 84px; margin: 0 auto 26px; position: relative; }
-  .ring::before, .ring::after {
-    content: ""; position: absolute; inset: 0; border-radius: 50%;
+  /* ---- Клавиатура кода ---- */
+  .dots { display: flex; justify-content: center; gap: 16px; margin: 26px 0 4px; }
+  .dot {
+    width: 15px; height: 15px; border-radius: 50%; border: 2px solid var(--line);
+    transition: transform .2s var(--ease), background .16s, border-color .16s;
   }
-  .ring::before {
-    border: 4px solid var(--border); border-top-color: var(--accent);
-    animation: spin .9s linear infinite;
+  .dot.filled { background: var(--accent); border-color: var(--accent); transform: scale(1.2); }
+  .pin-error { color: var(--bad); font-size: 13.5px; min-height: 22px; margin: 8px 0 10px; font-weight: 600; }
+  .pin-error.shake { animation: shake .38s var(--ease); }
+  @keyframes shake {
+    0%, 100% { transform: translateX(0); }
+    20% { transform: translateX(-7px); } 40% { transform: translateX(6px); }
+    60% { transform: translateX(-4px); } 80% { transform: translateX(3px); }
   }
-  .ring::after {
-    inset: 14px; border: 3px solid transparent; border-bottom-color: var(--accent);
-    animation: spin 1.4s linear infinite reverse;
+  .keypad { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; max-width: 312px; margin: 0 auto; }
+  .key {
+    height: 64px; border: 1px solid var(--line); border-radius: 18px;
+    background: var(--card); color: var(--text); font-family: var(--mono);
+    font-size: 24px; font-weight: 700; cursor: pointer;
+    transition: transform .1s var(--ease), background .15s, border-color .15s;
   }
+  .key:active { transform: scale(.94); background: var(--accent-soft); border-color: var(--accent); }
+  .key.blank { background: transparent; border-color: transparent; pointer-events: none; }
+  .powered { text-align: center; margin-top: 30px; color: var(--hint); font-size: 12.5px; letter-spacing: .02em; }
+  .powered b { color: var(--text); font-weight: 700; }
+
+  /* ---- Проверка кода ---- */
+  .checking { text-align: center; margin-top: 84px; }
+  .ring { width: 88px; height: 88px; margin: 0 auto 26px; position: relative; }
+  .ring::before, .ring::after { content: ""; position: absolute; inset: 0; border-radius: 50%; }
+  .ring::before { border: 3px solid var(--line); border-top-color: var(--accent); animation: spin .9s linear infinite; }
+  .ring::after { inset: 15px; border: 2px solid transparent; border-bottom-color: var(--accent); animation: spin 1.4s linear infinite reverse; }
   @keyframes spin { to { transform: rotate(360deg); } }
-  .checking .code { font-size: 30px; font-weight: 800; letter-spacing: 6px; animation: pulse 1.2s ease-in-out infinite; }
-  @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: .35; } }
+  .checking .code { font-family: var(--mono); font-size: 30px; font-weight: 800; letter-spacing: .3em; animation: pulse 1.3s ease-in-out infinite; }
+  @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: .35; } }
 
   /* ---- Карточки ---- */
-  .card { background: var(--card); border-radius: 18px; padding: 16px; margin-bottom: 14px; }
+  .card {
+    background: var(--card); border: 1px solid var(--line); border-radius: var(--r-lg);
+    padding: 16px; margin-bottom: 12px;
+  }
+  .card h3 { margin: 0 0 10px; font-size: 13px; color: var(--hint); font-weight: 650; letter-spacing: 0; }
+
   .vehicle { display: flex; align-items: center; gap: 14px; }
   .vehicle .plate {
-    background: var(--accent); color: var(--accent-text); font-weight: 800;
-    border-radius: 12px; padding: 10px 14px; font-size: 20px; letter-spacing: 1px;
-    box-shadow: 0 6px 18px rgba(79,140,255,.28);
+    font-family: var(--mono); background: var(--accent); color: var(--accent-ink);
+    font-weight: 800; border-radius: 12px; padding: 9px 13px; font-size: 20px;
+    letter-spacing: .08em; box-shadow: 0 8px 20px rgba(242, 166, 59, .22);
   }
-  .vehicle .meta { font-size: 13px; color: var(--hint); line-height: 1.55; }
-  .vehicle .meta b { color: var(--text); font-weight: 600; }
+  .vehicle .meta { font-size: 13px; color: var(--hint); line-height: 1.6; }
+  .vehicle .meta b { color: var(--text); font-weight: 650; font-variant-numeric: tabular-nums; }
 
   .menu-item {
     display: flex; align-items: center; gap: 14px; width: 100%; text-align: left;
-    background: var(--card); border: none; border-radius: 18px; padding: 16px;
-    color: var(--text); margin-bottom: 12px; cursor: pointer;
-    transition: transform .09s ease, box-shadow .2s;
+    background: var(--card); border: 1px solid var(--line); border-radius: var(--r-lg);
+    padding: 14px 16px; color: var(--text); margin-bottom: 10px; cursor: pointer;
+    transition: transform .1s var(--ease), border-color .16s;
   }
-  .menu-item:active { transform: scale(.975); }
-  .menu-item .ico { font-size: 26px; width: 42px; height: 42px; display: flex; align-items: center;
-                    justify-content: center; border-radius: 13px; background: rgba(128,140,170,.12); }
-  .menu-item .t { font-size: 17px; font-weight: 700; }
-  .menu-item .d { font-size: 13px; color: var(--hint); margin-top: 2px; }
-  .menu-item.primary { background: linear-gradient(135deg, var(--accent), #6ba0ff); color: #fff;
-                       box-shadow: 0 8px 22px rgba(79,140,255,.3); }
-  .menu-item.primary .d { color: rgba(255,255,255,.82); }
-  .menu-item.primary .ico { background: rgba(255,255,255,.18); }
+  .menu-item:active { transform: scale(.98); border-color: var(--accent); }
+  .menu-item .ico {
+    width: 42px; height: 42px; flex: 0 0 42px; display: flex; align-items: center; justify-content: center;
+    border-radius: 13px; background: var(--accent-soft); color: var(--accent);
+  }
+  .menu-item .ico svg { width: 22px; height: 22px; }
+  .menu-item .t { display: block; font-size: 16.5px; font-weight: 700; letter-spacing: -.01em; }
+  .menu-item .d { font-size: 12.5px; color: var(--hint); margin-top: 2px; }
+  .menu-item .chev { margin-left: auto; color: var(--hint); opacity: .7; }
+  .menu-item .chev svg { width: 18px; height: 18px; display: block; }
+  .menu-item.primary { background: var(--accent); border-color: transparent; color: var(--accent-ink); box-shadow: 0 14px 30px rgba(242, 166, 59, .22); }
+  .menu-item.primary .d { color: rgba(28, 19, 5, .72); }
+  .menu-item.primary .ico { background: rgba(28, 19, 5, .12); color: var(--accent-ink); }
+  .menu-item.primary .chev { color: var(--accent-ink); opacity: .55; }
   .menu-item.disabled { opacity: .45; pointer-events: none; }
 
-  .notice { border-radius: 16px; padding: 14px 16px; margin-bottom: 14px; font-size: 14px; line-height: 1.45; }
-  .notice.warn { background: var(--bad-bg); color: var(--bad); }
-  .notice.ok { background: var(--ok-bg); color: var(--ok); }
+  .notice { border-radius: var(--r-md); padding: 13px 15px; margin-bottom: 12px; font-size: 14px; line-height: 1.5; border: 1px solid transparent; }
+  .notice.warn { background: var(--bad-soft); color: var(--bad); border-color: rgba(255, 107, 107, .25); }
+  .notice.ok { background: var(--ok-soft); color: var(--ok); border-color: rgba(61, 220, 151, .22); }
 
-  .row { display: flex; justify-content: space-between; gap: 12px; padding: 10px 0; font-size: 15px; }
-  .row + .row { border-top: 1px solid var(--border); }
+  .row { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; padding: 10px 0; font-size: 15px; }
+  .row + .row { border-top: 1px solid var(--line); }
   .row .l { color: var(--hint); }
   .row .v { font-weight: 700; text-align: right; font-variant-numeric: tabular-nums; }
   .row .v.ok { color: var(--ok); } .row .v.bad { color: var(--bad); } .row .v.warn { color: var(--warn); }
-  .card h3 { margin: 0 0 8px; font-size: 13px; color: var(--hint); font-weight: 700;
-             text-transform: uppercase; letter-spacing: .4px; }
 
-  .field { margin-bottom: 12px; }
-  .field label { display: block; font-size: 13px; color: var(--hint); margin-bottom: 5px; }
+  .field { margin-bottom: 13px; }
+  .field label { display: block; font-size: 12.5px; color: var(--hint); margin-bottom: 6px; font-weight: 500; }
   .field input {
-    width: 100%; height: 50px; border-radius: 13px; border: 1.5px solid var(--border);
-    background: var(--bg); color: var(--text); font-size: 17px; padding: 0 14px; outline: none;
-    transition: border-color .15s, box-shadow .15s;
+    width: 100%; min-width: 0; height: 52px; border-radius: var(--r-md);
+    border: 1.5px solid var(--line); background: var(--bg); color: var(--text);
+    font-size: 17px; font-family: var(--mono); font-weight: 600; padding: 0 14px; outline: none;
+    transition: border-color .16s, box-shadow .16s;
   }
-  .field input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(79,140,255,.15); }
+  .field input[type="date"] { font-family: inherit; font-weight: 500; }
+  .field input::placeholder { color: var(--hint); opacity: .55; font-weight: 400; }
+  .field input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
   .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 0 12px; }
 
-  .btn { width: 100%; height: 56px; border: none; border-radius: 16px; font-size: 17px; font-weight: 700;
-         cursor: pointer; transition: transform .08s, opacity .15s; }
-  .btn:active { transform: scale(.98); }
-  .btn.primary { background: var(--accent); color: var(--accent-text); box-shadow: 0 8px 20px rgba(79,140,255,.28); }
-  .btn.ghost { background: transparent; color: var(--accent); border: 1.5px solid var(--accent); }
-  .btn:disabled { opacity: .55; }
+  .btn {
+    width: 100%; height: 56px; border: none; border-radius: var(--r-md);
+    font-size: 16.5px; font-weight: 700; letter-spacing: -.01em; cursor: pointer;
+    transition: transform .1s var(--ease), opacity .16s, box-shadow .16s;
+  }
+  .btn:active { transform: scale(.985); }
+  .btn.primary { background: var(--accent); color: var(--accent-ink); box-shadow: 0 12px 26px rgba(242, 166, 59, .24); }
+  .btn.ghost { background: transparent; color: var(--link); border: 1.5px solid var(--line); }
+  .btn:disabled { opacity: .55; box-shadow: none; }
   .btn + .btn { margin-top: 10px; }
 
-  .status { border-radius: 18px; padding: 20px 16px; text-align: center; margin-bottom: 16px; }
-  .status .big { font-size: 24px; font-weight: 800; margin-bottom: 4px; }
-  .status .small { font-size: 13px; opacity: .9; }
-  .status.ok { background: var(--ok-bg); color: var(--ok); }
-  .status.bad { background: var(--bad-bg); color: var(--bad); }
+  /* закреплённая кнопка действия */
+  .cta {
+    position: sticky; bottom: 0; z-index: 5;
+    margin: 16px -16px -40px; padding: 14px 16px calc(14px + env(safe-area-inset-bottom));
+    background: linear-gradient(to top, var(--bg) 74%, rgba(0, 0, 0, 0));
+  }
+  .cta .hint { margin: 10px 0 0; font-size: 12px; color: var(--hint); text-align: center; }
+
+  .status { display: flex; align-items: center; gap: 14px; text-align: left; border-radius: var(--r-lg); padding: 18px; margin-bottom: 14px; border: 1px solid transparent; }
+  .status .big { font-size: 19px; font-weight: 800; margin-bottom: 2px; letter-spacing: -.01em; }
+  .status .small { font-size: 13px; opacity: .85; line-height: 1.4; }
+  .status .mark { width: 44px; height: 44px; flex: 0 0 44px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 22px; }
+  .status.ok { background: var(--ok-soft); color: var(--ok); border-color: rgba(61, 220, 151, .22); }
+  .status.bad { background: var(--bad-soft); color: var(--bad); border-color: rgba(255, 107, 107, .22); }
+  .status.ok .mark { background: rgba(61, 220, 151, .16); }
+  .status.bad .mark { background: rgba(255, 107, 107, .16); }
 
   /* ---- Сверка ---- */
-  .cmp-head, .cmp-row { display: grid; grid-template-columns: 1.4fr 1fr 1fr; gap: 8px; align-items: center; }
-  .cmp-head { font-size: 11px; color: var(--hint); font-weight: 700; text-transform: uppercase;
-              letter-spacing: .3px; padding-bottom: 8px; border-bottom: 1px solid var(--border); }
+  .cmp-head, .cmp-row { display: grid; grid-template-columns: 1.25fr .95fr .95fr; gap: 8px; align-items: center; }
+  .cmp-head { font-size: 12px; color: var(--hint); font-weight: 600; padding-bottom: 9px; border-bottom: 1px solid var(--line); }
   .cmp-head span:not(:first-child), .cmp-row .a, .cmp-row .b { text-align: right; }
-  .cmp-row { padding: 11px 0; border-bottom: 1px solid var(--border); font-size: 14px;
-             font-variant-numeric: tabular-nums; }
+  .cmp-row { padding: 11px 0; border-bottom: 1px solid var(--line); font-size: 14px; font-variant-numeric: tabular-nums; }
   .cmp-row:last-child { border-bottom: none; }
   .cmp-row .k { color: var(--hint); }
-  .cmp-row .a { font-weight: 800; }
-  .cmp-row .b { color: var(--hint); }
+  .cmp-row .a { font-weight: 800; font-family: var(--mono); }
+  .cmp-row .b { color: var(--hint); font-family: var(--mono); }
   .cmp-row.good .a { color: var(--ok); }
   .cmp-row.bad .a { color: var(--bad); }
   .cmp-row.bad .b { color: var(--ok); font-weight: 700; }
 
-  .mismatch { border: 1.5px solid var(--bad); border-radius: 16px; padding: 16px;
-              margin-bottom: 14px; font-size: 14px; line-height: 1.55; }
+  .mismatch { border: 1.5px solid rgba(255, 107, 107, .45); background: var(--bad-soft); border-radius: var(--r-lg); padding: 16px; margin-bottom: 12px; font-size: 14px; line-height: 1.55; }
   .mismatch .title { color: var(--bad); font-weight: 800; margin-bottom: 8px; }
   .mismatch ul { margin: 6px 0 10px; padding-left: 20px; }
-  .mismatch li { margin-bottom: 3px; }
-  .mismatch .calc { margin-top: 6px; color: var(--text); line-height: 1.7; }
-  .mismatch .calc b { color: var(--accent); font-size: 16px; }
+  .mismatch li { margin-bottom: 4px; }
+  .mismatch .calc { margin-top: 6px; line-height: 1.7; }
+  .mismatch .calc b { color: var(--text); font-size: 16px; font-family: var(--mono); }
 
-  .topbar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px; }
-  .link { color: var(--accent); font-size: 14px; background: none; border: none; cursor: pointer; padding: 6px;
-          border-radius: 9px; }
-  .badge { display: inline-block; font-size: 11px; font-weight: 700; padding: 3px 9px; border-radius: 9px; }
-  .badge.ok { background: var(--ok-bg); color: var(--ok); }
-  .badge.bad { background: var(--bad-bg); color: var(--bad); }
-  .badge.corr { background: rgba(255,184,77,.18); color: var(--warn); }
-  .hist { background: var(--card); border-radius: 16px; padding: 14px 16px; margin-bottom: 10px; }
-  .hist .h { display: flex; justify-content: space-between; align-items: center; }
-  .hist .h b { font-size: 16px; }
-  .hist .kv { display: grid; grid-template-columns: 1fr 1fr; gap: 4px 12px; margin-top: 8px;
-              font-size: 13px; color: var(--hint); }
-  .hist .kv b { color: var(--text); }
-  .hist .h { cursor: pointer; }
-  .hist .wb-detail { display: none; margin-top: 10px; border-top: 1px solid var(--border); padding-top: 4px; }
-  .hist.open .wb-detail { display: block; animation: fade .2s ease; }
-  .empty { text-align: center; color: var(--hint); padding: 34px 10px; }
-  .toast { position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%) translateY(140%);
-           background: #111; color: #fff; padding: 13px 20px; border-radius: 14px; font-size: 14px;
-           transition: transform .35s cubic-bezier(.2,.9,.3,1); max-width: 90%; text-align: center; z-index: 50; }
+  .topbar { display: flex; justify-content: space-between; align-items: center; gap: 10px; margin-bottom: 16px; min-height: 32px; }
+  .link { color: var(--link); font-size: 14px; background: none; border: none; cursor: pointer; padding: 8px 6px; border-radius: 10px; font-weight: 600; }
+  .link:active { opacity: .65; }
+  .badge { display: inline-block; font-size: 11px; font-weight: 700; padding: 3px 9px; border-radius: 8px; letter-spacing: .01em; }
+  .badge.ok { background: var(--ok-soft); color: var(--ok); }
+  .badge.bad { background: var(--bad-soft); color: var(--bad); }
+  .badge.corr { background: var(--warn-soft); color: var(--warn); }
+
+  .hist { background: var(--card); border: 1px solid var(--line); border-radius: var(--r-md); padding: 14px 16px; margin-bottom: 10px; }
+  .hist .h { display: flex; justify-content: space-between; align-items: center; gap: 10px; cursor: pointer; }
+  .hist .h b { font-size: 15.5px; font-family: var(--mono); letter-spacing: .02em; }
+  .hist .kv { display: grid; grid-template-columns: 1fr 1fr; gap: 4px 14px; margin-top: 8px; font-size: 13px; color: var(--hint); }
+  .hist .kv b { color: var(--text); font-variant-numeric: tabular-nums; }
+  .hist .wb-detail { display: none; margin-top: 10px; border-top: 1px solid var(--line); padding-top: 8px; }
+  .hist.open .wb-detail { display: block; animation: fadeUp .2s var(--ease); }
+
+  .empty { text-align: center; color: var(--hint); padding: 38px 12px; font-size: 14px; line-height: 1.55; }
+  .toast {
+    position: fixed; left: 50%; bottom: calc(22px + env(safe-area-inset-bottom));
+    transform: translateX(-50%) translateY(150%); z-index: 60;
+    background: #101828; color: #fff; padding: 13px 20px; border-radius: 14px;
+    font-size: 14px; font-weight: 500; max-width: 88%; text-align: center;
+    box-shadow: 0 16px 40px rgba(0, 0, 0, .35);
+    transition: transform .38s var(--ease);
+  }
   .toast.show { transform: translateX(-50%) translateY(0); }
-  .spinner { width: 26px; height: 26px; border: 3px solid var(--border); border-top-color: var(--accent);
-             border-radius: 50%; margin: 40px auto; animation: spin 1s linear infinite; }
+  .spinner { width: 24px; height: 24px; border: 2.5px solid var(--line); border-top-color: var(--accent); border-radius: 50%; margin: 40px auto; animation: spin .9s linear infinite; }
+
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after { animation-duration: .001ms !important; transition-duration: .001ms !important; }
+  }
+
 </style>
 </head>
 <body>
@@ -216,7 +288,9 @@ window.addEventListener("unhandledrejection", function (ev) {
 
 <div class="screen" id="scr-outside">
   <div class="center">
-    <div class="logo">🚧</div>
+    <div class="brand">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7h10.5v9H3z"/><path d="M13.5 10.5H18l3 3v3h-7.5z"/><circle cx="7.5" cy="17.6" r="1.5"/><circle cx="17.4" cy="17.6" r="1.5"/></svg>
+    </div>
     <h1>Откройте через Telegram</h1>
     <p class="sub">Приложение работает внутри Telegram. Откройте бота <b>@resourseAVTR_bot</b> — кнопка «Открыть приложение».</p>
   </div>
@@ -224,7 +298,9 @@ window.addEventListener("unhandledrejection", function (ev) {
 
 <div class="screen" id="scr-error">
   <div class="center" style="margin-top:36px">
-    <div class="logo">⚠️</div>
+    <div class="brand">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4.5 20.5 20H3.5z"/><path d="M12 10v4.5"/><path d="M12 17.2h.01"/></svg>
+    </div>
     <h1>Ошибка сервера</h1>
     <p class="sub" id="err-text">Не удалось подключиться к серверу.</p>
     <button class="btn primary" id="err-retry">Повторить</button>
@@ -234,9 +310,12 @@ window.addEventListener("unhandledrejection", function (ev) {
 <!-- Экран входа -->
 <div class="screen" id="scr-lock">
   <div class="center">
-    <div class="logo">🚚</div>
-    <h1>АВТР(ПГ)</h1>
-    <p class="sub">Введите код доступа</p>
+    <div class="brand">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7h10.5v9H3z"/><path d="M13.5 10.5H18l3 3v3h-7.5z"/><circle cx="7.5" cy="17.6" r="1.5"/><circle cx="17.4" cy="17.6" r="1.5"/></svg>
+    </div>
+    <div class="app-name">АВТР · ПГ</div>
+    <h1 style="margin-top:8px">Проверка путёвок</h1>
+    <p class="sub">Введите код доступа — четыре цифры</p>
   </div>
   <div class="dots" id="dots"><div class="dot"></div><div class="dot"></div><div class="dot"></div><div class="dot"></div></div>
   <div class="pin-error center" id="pin-error"></div>
@@ -269,20 +348,24 @@ window.addEventListener("unhandledrejection", function (ev) {
   </div>
   <div id="menu-notice"></div>
   <button class="menu-item primary" id="m-new">
-    <span class="ico">📝</span>
+    <span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14"/></svg></span>
     <span><span class="t">Новый путевой</span><div class="d">Проверить и отправить</div></span>
+    <span class="chev"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l6 6-6 6"/></svg></span>
   </button>
   <button class="menu-item" id="m-history">
-    <span class="ico">📋</span>
+    <span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="4.5" y="4.5" width="15" height="16" rx="2.5"/><path d="M9 3.5h6v3H9z"/><path d="M8.5 11h7"/><path d="M8.5 15h5"/></svg></span>
     <span><span class="t">Мои путёвки</span><div class="d">История проверенных</div></span>
+    <span class="chev"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l6 6-6 6"/></svg></span>
   </button>
   <button class="menu-item" id="m-vehicle">
-    <span class="ico">🚚</span>
+    <span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7h10.5v9H3z"/><path d="M13.5 10.5H18l3 3v3h-7.5z"/><circle cx="7.5" cy="17.6" r="1.5"/><circle cx="17.4" cy="17.6" r="1.5"/></svg></span>
     <span><span class="t">Моя машина</span><div class="d">Документы и характеристики</div></span>
+    <span class="chev"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l6 6-6 6"/></svg></span>
   </button>
   <button class="menu-item" id="m-profile">
-    <span class="ico">👤</span>
+    <span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="3.2"/><path d="M5.5 20c1-3.4 3.6-5.2 6.5-5.2s5.5 1.8 6.5 5.2"/></svg></span>
     <span><span class="t">Профиль</span><div class="d">Водитель и закреплённая техника</div></span>
+    <span class="chev"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l6 6-6 6"/></svg></span>
   </button>
 </div>
 
@@ -334,17 +417,20 @@ window.addEventListener("unhandledrejection", function (ev) {
       <div class="field" id="row-motohours"><label>Моточасы</label><input id="f-motohours" inputmode="decimal" placeholder="0" /></div>
     </div>
   </div>
-  <button class="btn primary" id="btn-check">Проверить и отправить</button>
-  <p class="muted center" style="font-size:12px;margin-top:12px">
-    Отчёт проверится и сразу уйдёт на сервер
-  </p>
+  <div class="cta">
+    <button class="btn primary" id="btn-check">Проверить и отправить</button>
+    <p class="hint">Проверим и сразу сохраним на сервер</p>
+  </div>
 </div>
 
 <!-- Результат проверки -->
 <div class="screen" id="scr-result">
   <div class="status" id="res-status">
-    <div class="big" id="res-status-big">—</div>
-    <div class="small" id="res-status-small">—</div>
+    <div class="mark" id="res-mark">•</div>
+    <div>
+      <div class="big" id="res-status-big">—</div>
+      <div class="small" id="res-status-small">—</div>
+    </div>
   </div>
 
   <div class="card">
@@ -372,6 +458,14 @@ window.addEventListener("unhandledrejection", function (ev) {
 
 <script>
 const tg = window.Telegram && window.Telegram.WebApp ? window.Telegram.WebApp : null;
+(function () {
+  var dark = true;
+  try {
+    if (tg && tg.colorScheme) dark = tg.colorScheme === "dark";
+    else if (window.matchMedia) dark = window.matchMedia("(prefers-color-scheme: dark)").matches;
+  } catch (e) {}
+  document.documentElement.setAttribute("data-theme", dark ? "dark" : "light");
+})();
 const IN_TELEGRAM = !!(tg && tg.initData);
 let session = null, vehicle = null, pin = "", editingId = null, fixMode = false, lastSaved = null;
 
@@ -497,7 +591,7 @@ async function submitPin() {
       if (data.token) setToken(data.token);
     }
     if (data.kind === "admin") {
-      window.location.href = IN_TELEGRAM ? "/admin?v=11#just" : "/admin";
+      window.location.href = IN_TELEGRAM ? "/admin?v=12#just" : "/admin";
       return;
     }
     vehicle = data.vehicle;
@@ -761,7 +855,8 @@ function renderResult(d, waybillNo, corrected) {
   const st = $("res-status");
   st.className = "status " + (d.is_ok ? "ok" : "bad");
   const action = corrected ? "Исправлено" : "Отправлено";
-  $("res-status-big").textContent = d.is_ok ? `✔ ${action}` : "⚠ Найдены расхождения";
+  $("res-mark").textContent = d.is_ok ? "✓" : "!";
+  $("res-status-big").textContent = d.is_ok ? action : "Найдены расхождения";
   $("res-status-small").textContent = corrected
     ? `Путевой №${waybillNo} исправлен и сохранён`
     : (d.is_ok ? `Путевой №${waybillNo} сохранён на сервере`
