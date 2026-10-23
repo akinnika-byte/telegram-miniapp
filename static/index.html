@@ -14,10 +14,10 @@
      Дизайн-система: «приборная панель»
      ============================================================ */
   :root {
-    --bg: var(--tg-theme-bg-color, #0d121b);
-    --card: var(--tg-theme-secondary-bg-color, #161d29);
-    --text: var(--tg-theme-text-color, #eef2f8);
-    --hint: var(--tg-theme-hint-color, #94a0b8);
+    --bg: #0d121b;
+    --card: #161d29;
+    --text: #eef2f8;
+    --hint: #94a0b8;
     --line: rgba(126, 140, 170, .22);
     --accent: #f2a63b;
     --accent-fill: #f2a63b;
@@ -31,21 +31,7 @@
     --ease: cubic-bezier(.2, .8, .2, 1);
     --mono: ui-monospace, "SF Mono", "Roboto Mono", "DejaVu Sans Mono", Menlo, monospace;
     --shadow: 0 12px 32px rgba(0, 0, 0, .22);
-  }
-  html[data-theme="light"] {
-    --bg: var(--tg-theme-bg-color, #f4f6fa);
-    --card: var(--tg-theme-secondary-bg-color, #ffffff);
-    --text: var(--tg-theme-text-color, #101828);
-    --hint: var(--tg-theme-hint-color, #667085);
-    --line: rgba(16, 24, 40, .12);
-    --accent: #b26a00;
-    --accent-fill: #f2a63b;
-    --accent-soft: rgba(178, 106, 0, .10);
-    --link: #a36400;
-    --ok: #0e9f6e; --ok-soft: rgba(14, 159, 110, .12);
-    --bad: #d92d20; --bad-soft: rgba(217, 45, 32, .1);
-    --warn: #b26a00; --warn-soft: rgba(178, 106, 0, .12);
-    --shadow: 0 12px 28px rgba(16, 24, 40, .08);
+    color-scheme: dark;
   }
 
   * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
@@ -245,7 +231,7 @@
   .toast {
     position: fixed; left: 50%; bottom: calc(22px + env(safe-area-inset-bottom)); opacity: 0; pointer-events: none;
     transform: translateX(-50%) translateY(150%); z-index: 60;
-    background: #101828; color: #fff; padding: 13px 20px; border-radius: 14px;
+    background: #1f2837; color: var(--text); border: 1px solid var(--line); padding: 13px 20px; border-radius: 14px;
     font-size: 14px; font-weight: 500; max-width: 88%; text-align: center;
     box-shadow: 0 16px 40px rgba(0, 0, 0, .35);
     transition: transform .38s var(--ease);
@@ -462,14 +448,6 @@ window.addEventListener("unhandledrejection", function (ev) {
 
 <script>
 const tg = window.Telegram && window.Telegram.WebApp ? window.Telegram.WebApp : null;
-(function () {
-  var dark = true;
-  try {
-    if (tg && tg.colorScheme) dark = tg.colorScheme === "dark";
-    else if (window.matchMedia) dark = window.matchMedia("(prefers-color-scheme: dark)").matches;
-  } catch (e) {}
-  document.documentElement.setAttribute("data-theme", dark ? "dark" : "light");
-})();
 const IN_TELEGRAM = !!(tg && tg.initData);
 let session = null, vehicle = null, pin = "", editingId = null, fixMode = false, lastSaved = null;
 
