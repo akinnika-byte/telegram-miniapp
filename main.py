@@ -1035,50 +1035,83 @@ def admin_export(
         if not period:
             raise HTTPException(status_code=404, detail="Период не найден")
 
-        records = conn.execute(
+        template = conn.execute(
+            "select data from report_templates where name = 'rasshifrovka'"
+        ).fetchone()
+
+        vehicles = conn.execute(
             """
-            select w.id, w.plate, w.model, w.km_total_odo, w.tank_start, w.tank_end,
-                   w.fuel_in, w.fuel_spent, w.fuel_calc, w.waybill_date,
-                   coalesce(v.fuel_type, 'diesel') as fuel_type
+            select v.plate, v.model, coalesce(v.fuel_type, 'diesel') as fuel_type,
+                   ls.tank_end as last_tank_end
+            from vehicles v
+            left join lateral (
+                select tank_end
+                from waybills w
+                where w.vehicle_id = v.id
+                order by w.waybill_date desc nulls last, w.id desc
+                limit 1
+            ) ls on true
+            where v.is_active
+            order by v.plate
+            """
+        ).fetchall()
+
+        period_rows = conn.execute(
+            """
+            select w.plate,
+                   sum(w.km_total_odo) as km,
+                   sum(w.fuel_in) as fuel_in,
+                   sum(w.fuel_spent) as fuel_spent,
+                   (array_agg(w.tank_start order by w.waybill_date nulls last, w.id))[1] as tank_start
             from waybills w
-            left join vehicles v on v.id = w.vehicle_id
             where w.period_id = %s
-            order by w.plate, w.waybill_date nulls last, w.id
+            group by w.plate
             """,
             (period_id,),
         ).fetchall()
 
-    if not records:
-        raise HTTPException(status_code=400, detail="За период нет путевых листов")
+    if not template:
+        raise HTTPException(
+            status_code=400,
+            detail="Шаблон расшифровки не загружен (scripts/upload_template.py)",
+        )
 
-    groups: dict[str, dict] = {}
-    for r in records:
-        g = groups.setdefault(r["plate"], {
-            "plate": r["plate"],
-            "model": r["model"],
-            "fuel_type": r["fuel_type"] or "diesel",
-            "km": 0.0,
-            "fuel_in": 0.0,
-            "fuel_spent": 0.0,
-            "fuel_calc": 0.0,
-            "tank_start": float(r["tank_start"]),
-            "tank_end": float(r["tank_end"]),
-        })
-        g["km"] += float(r["km_total_odo"])
-        g["fuel_in"] += float(r["fuel_in"])
-        g["fuel_spent"] += float(r["fuel_spent"])
-        g["fuel_calc"] += float(r["fuel_calc"])
-        g["tank_end"] = float(r["tank_end"])
+    aggregated = {r["plate"]: r for r in period_rows}
 
-    def sort_key(p: str):
-        digits = "".join(ch for ch in p if ch.isdigit())
-        return (0, int(digits)) if digits else (1, p)
+    def sort_key(plate: str):
+        digits = "".join(ch for ch in str(plate) if ch.isdigit())
+        return (0, int(digits)) if digits else (1, str(plate))
 
-    rows = [groups[p] for p in sorted(groups, key=sort_key)]
-    for g in rows:
-        for key in ("km", "fuel_in", "fuel_spent", "fuel_calc"):
-            g[key] = round(g[key], 2)
-    data = build_rasshifrovka(period, rows)
+    items = []
+    for v in sorted(vehicles, key=lambda x: sort_key(x["plate"])):
+        agg = aggregated.get(v["plate"])
+        balance = float(v["last_tank_end"] or 0)
+        if agg:
+            tank_start = agg["tank_start"]
+            if tank_start is None:
+                tank_start = balance if v["last_tank_end"] is not None else None
+            items.append({
+                "plate": v["plate"],
+                "model": v["model"],
+                "fuel_type": v["fuel_type"] or "diesel",
+                "km": float(agg["km"] or 0),
+                "fuel_in": float(agg["fuel_in"] or 0),
+                "fuel_spent": float(agg["fuel_spent"] or 0),
+                "tank_start": None if tank_start is None else float(tank_start),
+            })
+        else:
+            # Машина не выезжала: в отчёт попадает с остатком в баке
+            items.append({
+                "plate": v["plate"],
+                "model": v["model"],
+                "fuel_type": v["fuel_type"] or "diesel",
+                "km": 0.0,
+                "fuel_in": 0.0,
+                "fuel_spent": 0.0,
+                "tank_start": balance if v["last_tank_end"] is not None else None,
+            })
+
+    data = build_rasshifrovka(bytes(template["data"]), period, items)
 
     filename = f"Расшифровка {period['name']}.xlsx"
     return Response(
@@ -1448,6 +1481,9 @@ def admin_migrate(user: dict = Depends(require_admin)) -> dict:
         "last_seen_at timestamptz not null default now(), expires_at timestamptz)",
         "create index if not exists idx_web_sessions_hash "
         "on web_sessions(token_hash)",
+        "create table if not exists report_templates ("
+        "name text primary key, data bytea not null, "
+        "updated_at timestamptz not null default now())",
     ]
     with db() as conn:
         for sql in statements:

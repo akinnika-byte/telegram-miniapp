@@ -35,6 +35,13 @@ create table if not exists vehicles (
     updated_at      timestamptz not null default now()
 );
 
+-- ---------- Шаблоны отчётов (xlsx в базе, чтобы не хранить бланк в репозитории) ----------
+create table if not exists report_templates (
+    name       text primary key,                            -- 'rasshifrovka'
+    data       bytea not null,
+    updated_at timestamptz not null default now()
+);
+
 -- ---------- Отчётные периоды (месяцы) ----------
 -- Привязка путевого к отчёту идёт по дате: start_date <= дата <= end_date.
 -- Периоды можно задавать с нестандартными границами (по приказу).
@@ -218,6 +225,7 @@ alter table waybills          enable row level security;
 alter table activity_log      enable row level security;
 alter table vehicle_documents enable row level security;
 alter table vehicle_state     enable row level security;
+alter table report_templates  enable row level security;
 
 -- ============================================================
 --  Дополнения к существующей базе (идемпотентно)

@@ -1,255 +1,215 @@
-"""Формирование «Расшифровки» (форма № 63) в Excel из данных путевых листов.
+"""Заполнение «Расшифровки» (форма № 63) по шаблону.
 
-Повторяет бланк: шапка, таблица по машинам с разделением на дизельное
-топливо и бензин, итоги в литрах и килограммах, подписи.
+Берётся настоящий бланк (хранится в БД, таблица report_templates), в нём
+заменяются только нужные ячейки — как в desktop-версии:
 
-Личные данные (в/ч, подразделение, ответственное лицо) берутся из переменных
-окружения, а не из репозитория.
+  • строки машин находятся по первым цифрам номера (колонка C);
+  • заполняются D (пробег), E (остаток на начало), F (получено),
+    G (израсходовано), I (=G), L (=E+F−G);
+  • машины, которых нет в шаблоне, добавляются строками в свой раздел
+    (дизель / бензин) с сохранением оформления;
+  • строки шаблона, которых нет в базе, остаются как «не ездили»:
+    обороты обнуляются, остаток переносится.
+
+Оформление, объединения, подписи и печать берутся из шаблона без изменений.
 """
 
 from __future__ import annotations
 
 import os
+import re
+from copy import copy
 from io import BytesIO
 
-from openpyxl import Workbook
-from openpyxl.styles import Alignment, Border, Font, Side
+from openpyxl import load_workbook
 from openpyxl.utils import get_column_letter
 
-THIN = Side(style="thin")
-BOX = Border(left=THIN, right=THIN, top=THIN, bottom=THIN)
-CENTER = Alignment(horizontal="center", vertical="center", wrap_text=True)
-LEFT = Alignment(horizontal="left", vertical="center", wrap_text=False)
-LEFT_TOP = Alignment(horizontal="left", vertical="center", wrap_text=True)
-NO_WRAP = Alignment(horizontal="center", vertical="center", wrap_text=False)
-NUM_FMT = "General"
-
-# Ширины как в бланке — иначе текст «расползается» по буквам.
-WIDTHS = {
-    "A": 5, "B": 26, "C": 12, "D": 12, "E": 12, "F": 12,
-    "G": 12, "H": 8, "I": 12, "J": 8, "K": 12, "L": 12,
-}
-
-COLUMNS = "ABCDEFGHIJKL"
+LAST_COL = 12
 
 
-def _num(value) -> float:
-    try:
-        return float(value or 0)
-    except (TypeError, ValueError):
-        return 0.0
+def _digits(value) -> str | None:
+    m = re.match(r"\s*(\d+)", str(value or ""))
+    return m.group(1) if m else None
 
 
-def _merge(ws, row: int, first_col: int, last_col: int) -> None:
-    if last_col > first_col:
+def _find_row(ws, prefix: str, start: int = 1) -> int | None:
+    prefix = prefix.strip().lower()
+    for row in range(start, ws.max_row + 1):
+        value = ws.cell(row=row, column=1).value
+        if value and str(value).strip().lower().startswith(prefix):
+            return row
+    return None
+
+
+def _insert_rows(ws, index: int, amount: int) -> None:
+    """Вставка строк с сохранением объединений, высот и стилей."""
+    if amount <= 0:
+        return
+    heights = {
+        row: dim.height
+        for row, dim in ws.row_dimensions.items()
+        if dim.height is not None
+    }
+    merges = [
+        (m.min_col, m.min_row, m.max_col, m.max_row)
+        for m in ws.merged_cells.ranges
+    ]
+    for m in list(ws.merged_cells.ranges):
+        ws.unmerge_cells(str(m))
+
+    ws.insert_rows(index, amount)
+
+    for col_min, row_min, col_max, row_max in merges:
+        shift = amount if row_min >= index else 0
         ws.merge_cells(
-            start_row=row, start_column=first_col,
-            end_row=row, end_column=last_col,
+            start_row=row_min + shift, end_row=row_max + shift,
+            start_column=col_min, end_column=col_max,
         )
 
+    for row in list(ws.row_dimensions.keys()):
+        ws.row_dimensions[row].height = None
+    for row, height in heights.items():
+        ws.row_dimensions[row + (amount if row >= index else 0)].height = height
 
-def _frame(ws, row: int) -> None:
-    """Рамка вокруг всей строки таблицы."""
-    for col in range(1, len(COLUMNS) + 1):
-        ws.cell(row=row, column=col).border = BOX
+
+def _copy_style(ws, src_row: int, dst_row: int) -> None:
+    for col in range(1, LAST_COL + 1):
+        src = ws.cell(row=src_row, column=col)
+        dst = ws.cell(row=dst_row, column=col)
+        dst._style = copy(src._style)
 
 
-def build_rasshifrovka(period: dict, records: list) -> bytes:
-    """Возвращает xlsx-файл в виде байтов."""
-    unit = os.getenv("UNIT_NAME", "в/ч ____________")
-    responsible = os.getenv("ACCOUNTABLE_PERSON", "")
-    subdivision = os.getenv("SUBDIVISION", "")
+def _write_vehicle(ws, row: int, item: dict, *, write_label: bool = True) -> None:
+    if write_label:
+        ws.cell(row=row, column=2).value = item.get("model") or ""
+        ws.cell(row=row, column=3).value = item.get("plate") or ""
+    ws.cell(row=row, column=4).value = round(float(item.get("km") or 0), 2)
+    if item.get("tank_start") is not None:
+        ws.cell(row=row, column=5).value = round(float(item["tank_start"]), 2)
+    elif write_label:
+        ws.cell(row=row, column=5).value = 0
+    ws.cell(row=row, column=6).value = round(float(item.get("fuel_in") or 0), 2)
+    ws.cell(row=row, column=7).value = round(float(item.get("fuel_spent") or 0), 2)
+    ws.cell(row=row, column=8).value = "-"
+    ws.cell(row=row, column=9).value = f"=G{row}"
+    ws.cell(row=row, column=10).value = "-"
+    ws.cell(row=row, column=11).value = "-"
+    ws.cell(row=row, column=12).value = f"=E{row}+F{row}-G{row}"
 
-    wb = Workbook()
+
+def _clear_vehicle_row(ws, row: int) -> None:
+    """Строка шаблона без данных: машина есть, но в базе её нет."""
+    ws.cell(row=row, column=4).value = 0
+    ws.cell(row=row, column=6).value = 0
+    ws.cell(row=row, column=7).value = 0
+    ws.cell(row=row, column=9).value = "-"
+    ws.cell(row=row, column=11).value = "-"
+    ws.cell(row=row, column=12).value = f"=E{row}"
+
+
+def _fill_block(ws, first_row: int, totals_row: int, items: list) -> int:
+    """Заполняет раздел. Возвращает новую строку итогов."""
+    template_rows: dict[str, list[int]] = {}
+    for row in range(first_row, totals_row):
+        key = _digits(ws.cell(row=row, column=3).value)
+        if key:
+            template_rows.setdefault(key, []).append(row)
+
+    matched: set[int] = set()
+    pending: list[dict] = []
+    for item in items:
+        rows = template_rows.get(_digits(item.get("plate")) or "")
+        if rows:
+            row = rows.pop(0)
+            matched.add(row)
+            _write_vehicle(ws, row, item, write_label=False)
+        else:
+            pending.append(item)
+
+    original_rows = set(range(first_row, totals_row))
+    for row in original_rows - matched:
+        _clear_vehicle_row(ws, row)
+
+    if pending:
+        _insert_rows(ws, totals_row, len(pending))
+        for offset, item in enumerate(pending):
+            row = totals_row + offset
+            _copy_style(ws, totals_row - 1, row)
+            ws.row_dimensions[row].height = 15
+            _write_vehicle(ws, row, item)
+        totals_row += len(pending)
+
+    return totals_row
+
+
+def _write_totals(ws, totals_row: int, first_row: int, last_row: int, factor: float) -> None:
+    for col in range(5, LAST_COL + 1):
+        letter = get_column_letter(col)
+        ws.cell(row=totals_row, column=col).value = f"=SUM({letter}{first_row}:{letter}{last_row})"
+        ws.cell(row=totals_row + 1, column=col).value = f"={letter}{totals_row}*{factor}"
+
+
+def _renumber(ws, first_row: int, last_row: int, start: int) -> int:
+    number = start
+    for row in range(first_row, last_row):
+        if _digits(ws.cell(row=row, column=3).value):
+            ws.cell(row=row, column=1).value = number
+            number += 1
+    return number
+
+
+def build_rasshifrovka(template: bytes, period: dict, vehicles: list) -> bytes:
+    """Возвращает заполненный xlsx (байты) на основе шаблона."""
+    wb = load_workbook(BytesIO(template))
     ws = wb.active
-    ws.title = "Расшифровка"
-    ws.sheet_view.showGridLines = False
 
-    for col, width in WIDTHS.items():
-        ws.column_dimensions[col].width = width
+    unit = (os.getenv("UNIT_NAME") or "").strip()
+    subdivision = (os.getenv("SUBDIVISION") or "").strip()
+    responsible = (os.getenv("ACCOUNTABLE_PERSON") or "").strip()
 
-    def put(row: int, col: int, value, *, bold=False, align=LEFT,
-            size=11, fmt=None, border=False):
-        cell = ws.cell(row=row, column=col, value=value)
-        cell.font = Font(bold=bold, size=size)
-        cell.alignment = align
-        if border:
-            cell.border = BOX
-        if fmt:
-            cell.number_format = fmt
-        return cell
+    # Шапка: правим только то, что задано настройками
+    ws["D6"] = f"                            за {period['name']} г."
+    ws["K6"] = period["end_date"]
+    if unit:
+        ws["B7"] = "_____________________" + unit + "___________________________________"
+    if subdivision:
+        ws["A9"] = "Структурное подразделение " + subdivision
+    if responsible:
+        ws["A10"] = (
+            "                                        Материально ответственное лицо:  "
+            + responsible
+        )
 
-    # ---------- Шапка ----------
-    ws.row_dimensions[1].height = 24
-    ws.merge_cells("D1:H1")
-    put(1, 4, "РАСШИФРОВКА", bold=True, align=CENTER, size=14)
+    diesel = [v for v in vehicles if (v.get("fuel_type") or "diesel") != "petrol"]
+    petrol = [v for v in vehicles if (v.get("fuel_type") or "diesel") == "petrol"]
 
-    ws.merge_cells("B2:G2")
-    put(2, 2, "о расходе горючего и смазочных материалов")
+    # ---------- Дизельное топливо ----------
+    diesel_totals = _find_row(ws, "итого дт")
+    if diesel_totals is None:
+        raise ValueError("в шаблоне не найден раздел «Итого ДТ»")
+    diesel_first = _find_row(ws, "дизельное топливо")
+    diesel_first = (diesel_first or 14) + 1
 
-    put(4, 11, "Код", align=CENTER)
-    put(5, 11, 6002234, align=CENTER)
-    ws.merge_cells("F5:J5")
-    put(5, 6, "Форма № 63 по ОКУД", align=NO_WRAP)
-    put(6, 7, "Дата", align=CENTER)
-    put(6, 11, period["end_date"], align=CENTER, fmt="DD.MM.YYYY")
+    diesel_totals = _fill_block(ws, diesel_first, diesel_totals, diesel)
+    diesel_last = diesel_totals - 1
+    _write_totals(ws, diesel_totals, diesel_first, diesel_last, 0.856)
 
-    ws.merge_cells("D6:E6")
-    put(6, 4, f"за {period['name']} г.", align=CENTER)
+    # ---------- Бензин ----------
+    petrol_header = _find_row(ws, "автомобильный бензин")
+    if petrol_header is None:
+        raise ValueError("в шаблоне не найден раздел «Автомобильный бензин»")
+    petrol_totals = _find_row(ws, "итого аи-92", petrol_header)
+    if petrol_totals is None:
+        raise ValueError("в шаблоне не найден раздел «Итого АИ-92»")
+    petrol_first = petrol_header + 1
 
-    ws.merge_cells("B7:G7")
-    put(7, 2, unit)
-    put(7, 10, "по ОКПО", align=NO_WRAP)
+    petrol_totals = _fill_block(ws, petrol_first, petrol_totals, petrol)
+    petrol_last = petrol_totals - 1
+    _write_totals(ws, petrol_totals, petrol_first, petrol_last, 0.755)
 
-    ws.row_dimensions[9].height = 20
-    _merge(ws, 9, 1, 12)
-    put(9, 1, "Структурное подразделение" + (f" {subdivision}" if subdivision else ""))
-    _frame(ws, 9)
-
-    ws.row_dimensions[10].height = 20
-    _merge(ws, 10, 1, 12)
-    put(10, 1, "Материально ответственное лицо: " + responsible)
-    _frame(ws, 10)
-
-    # ---------- Шапка таблицы ----------
-    ws.row_dimensions[12].height = 42
-    ws.row_dimensions[13].height = 18
-
-    ws.merge_cells("A12:A13")
-    ws.merge_cells("B12:B13")
-    ws.merge_cells("C12:C13")
-    ws.merge_cells("D12:D13")
-    ws.merge_cells("E12:E13")
-    ws.merge_cells("F12:F13")
-    ws.merge_cells("G12:H12")
-    ws.merge_cells("I12:J12")
-    ws.merge_cells("K12:K13")
-    ws.merge_cells("L12:L13")
-
-    put(12, 1, "№\nп/п", bold=True, align=CENTER)
-    put(12, 2, "Марка\nмашины, агрегата", bold=True, align=CENTER)
-    put(12, 3, "Номер\nмашины, бортовой номер", bold=True, align=CENTER)
-    put(12, 4, "Пробег за месяц, км", bold=True, align=CENTER)
-    put(12, 5, "Остаток на начало месяца", bold=True, align=CENTER)
-    put(12, 6, "Получено за месяц", bold=True, align=CENTER)
-    put(12, 7, "Израсходовано", bold=True, align=CENTER)
-    put(13, 7, "Фактич", bold=True, size=10, align=CENTER)
-    put(13, 8, "Прочие", bold=True, size=10, align=CENTER)
-    put(12, 9, "Положено по норме", bold=True, align=CENTER)
-    put(13, 9, "Фактич", bold=True, size=10, align=CENTER)
-    put(13, 10, "Прочие", bold=True, size=10, align=CENTER)
-    put(12, 11, "Экономия (+),\nперерасход (-)", bold=True, size=10, align=CENTER)
-    put(12, 12, "Остаток на конец месяца", bold=True, align=CENTER)
-    _frame(ws, 12)
-    _frame(ws, 13)
-
-    def section(row: int, title: str) -> None:
-        ws.row_dimensions[row].height = 20
-        _merge(ws, row, 1, 12)
-        put(row, 1, title, bold=True)
-        _frame(ws, row)
-
-    def vehicle_block(start_row: int, items: list, start_index: int) -> int:
-        row = start_row
-        for index, it in enumerate(items, start=start_index):
-            km = round(_num(it.get("km")), 2)
-            tank_start = round(_num(it.get("tank_start")), 2)
-            fuel_in = round(_num(it.get("fuel_in")), 2)
-            fuel_spent = round(_num(it.get("fuel_spent")), 2)
-            tank_end = round(_num(it.get("tank_end")), 2)
-
-            put(row, 1, index, align=CENTER)
-            put(row, 2, it.get("model") or "")
-            put(row, 3, it.get("plate") or "", align=CENTER)
-            put(row, 4, km, align=CENTER, fmt=NUM_FMT)
-            put(row, 5, tank_start, align=CENTER, fmt=NUM_FMT)
-            put(row, 6, fuel_in, align=CENTER, fmt=NUM_FMT)
-            put(row, 7, fuel_spent, align=CENTER, fmt=NUM_FMT)
-            put(row, 8, "-", align=CENTER)
-            # Бланк: «Положено по норме» = фактически израсходовано,
-            # экономия/перерасход не считаются (прочерк).
-            put(row, 9, f"=G{row}", align=CENTER, fmt=NUM_FMT)
-            put(row, 10, "-", align=CENTER)
-            put(row, 11, "-", align=CENTER)
-            put(row, 12, tank_end, align=CENTER, fmt=NUM_FMT)
-            ws.row_dimensions[row].height = 16
-            _frame(ws, row)
-            row += 1
-        return row
-
-    def totals(row: int, title: str, first: int, last: int, factor: float | None) -> int:
-        _merge(ws, row, 1, 4)
-        put(row, 1, title, bold=True)
-        for col in range(5, 13):
-            letter = get_column_letter(col)
-            if factor is None:
-                formula = f"=SUM({letter}{first}:{letter}{last})"
-            else:
-                formula = f"={letter}{row - 1}*{factor}"
-            put(row, col, formula, bold=True, align=CENTER, fmt=NUM_FMT)
-        ws.row_dimensions[row].height = 18
-        _frame(ws, row)
-        return row + 1
-
-    diesel = [r for r in records if (r.get("fuel_type") or "diesel") != "petrol"]
-    petrol = [r for r in records if (r.get("fuel_type") or "diesel") == "petrol"]
-
-    row = 14
-    section(row, "Дизельное топливо")
-    row += 1
-    diesel_first = row
-    row = vehicle_block(row, diesel, 1)
-    diesel_last = row - 1
-    if not diesel:
-        put(row, 1, "—", align=CENTER)
-        _frame(ws, row)
-        diesel_first = diesel_last = row
-        row += 1
-    row = totals(row, "Итого ДТ  л.:", diesel_first, diesel_last, None)
-    row = totals(row, "Итого ДТ кг.:", diesel_first, diesel_last, 0.856)
-
-    row += 1
-    section(row, "Автомобильный бензин")
-    row += 1
-    petrol_first = row
-    row = vehicle_block(row, petrol, len(diesel) + 1)
-    petrol_last = row - 1
-    if not petrol:
-        put(row, 1, "—", align=CENTER)
-        _frame(ws, row)
-        petrol_first = petrol_last = row
-        row += 1
-    row = totals(row, "Итого АИ-92 л.:", petrol_first, petrol_last, None)
-    row = totals(row, "Итого АИ-92 кг.:", petrol_first, petrol_last, 0.755)
-
-    # ---------- Основание и подписи ----------
-    row += 1
-    _merge(ws, row, 1, 12)
-    put(row, 1, "Основание: Приказ МО РФ 2021 г. № 690 (нормы расхода горючего)")
-    row += 2
-
-    for text in (
-        "Пробег (наработку) машин (агрегатов) подтверждаю.",
-        "Председатель комиссии: ______________________________",
-        "Члены комиссии: ______________________________________",
-        "Материально ответственное лицо: ______________________",
-        "«___» _________________ 20__ г.",
-    ):
-        _merge(ws, row, 1, 12)
-        put(row, 1, text)
-        row += 1
-
-    # ---------- Печать ----------
-    ws.print_title_rows = "12:13"
-    ws.page_setup.orientation = "portrait"
-    ws.page_setup.paperSize = ws.PAPERSIZE_A4
-    ws.page_setup.fitToWidth = 1
-    ws.page_setup.fitToHeight = 0
-    ws.sheet_properties.pageSetUpPr.fitToPage = True
-    ws.page_margins.left = 0.4
-    ws.page_margins.right = 0.3
-    ws.page_margins.top = 0.4
-    ws.page_margins.bottom = 0.4
+    # ---------- Нумерация строк ----------
+    next_no = _renumber(ws, diesel_first, diesel_totals, 1)
+    _renumber(ws, petrol_first, petrol_totals, next_no)
 
     buffer = BytesIO()
     wb.save(buffer)
