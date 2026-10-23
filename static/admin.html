@@ -1080,7 +1080,7 @@ function openVehicleForm(v, backTo) {
         }
         let val = v && v[key] != null ? v[key] : "";
         if (type === "date" && val) val = String(val).slice(0, 10);
-        if (type === "decimal" || type === "numeric") val = numStr(val);
+        if ((type === "decimal" || type === "numeric") && key !== "plate") val = numStr(val);
         const im = type === "date" ? "" : (type === "decimal" ? 'inputmode="decimal"' : (type === "numeric" ? 'inputmode="numeric"' : ""));
         const input = `<input id="vf-${key}" type="${type === "date" ? "date" : "text"}" ${im} value="${esc(val)}" />`;
         if (key === "motohour_norm") {
