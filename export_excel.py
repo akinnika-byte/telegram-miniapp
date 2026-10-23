@@ -150,11 +150,11 @@ def _write_totals(ws, totals_row: int, first_row: int, last_row: int, factor: fl
 
 
 def _renumber(ws, first_row: int, last_row: int, start: int) -> int:
+    """Сквозная нумерация всех строк раздела (включая без номера машины)."""
     number = start
     for row in range(first_row, last_row):
-        if _digits(ws.cell(row=row, column=3).value):
-            ws.cell(row=row, column=1).value = number
-            number += 1
+        ws.cell(row=row, column=1).value = number
+        number += 1
     return number
 
 

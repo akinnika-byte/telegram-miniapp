@@ -17,6 +17,8 @@
 - `periods.py` — определение отчётного периода по дате
 - `security.py` — проверка подписи initData (HMAC-SHA256, ключ "WebAppData" + BOT_TOKEN)
 - `db.py` — пул соединений с Supabase
+- `export_excel.py` — заполнение «Расшифровки» (форма № 63) по шаблону из БД
+- `scripts/upload_template.py` — загрузка бланка расшифровки в `report_templates`
 - `sql/schema.sql` — схема (идемпотентная), `sql/seed.sql` — периоды и 19 машин
 - `scripts/init_db.py`, `scripts/set_admin_codes.py`, `scripts/api_check.py`
 
@@ -76,6 +78,12 @@ tank_end_calc  = tank_start + fuel_in - P
 - Render Free засыпает после ~15 мин простоя; настроен autoping (cron-job.org) на `/api/health`.
 - В `admin.html` обработчики вешать только через помощника `on(id, evt, fn)`; не ссылаться на удалённые id (была ошибка с `form-back`/`wb-back`, ломавшая всю страницу).
 - Кнопки «назад» в админке — атрибут `data-backto`, а не id.
+- «Расшифровка» (форма № 63) заполняется по настоящему бланку: он лежит в
+  `report_templates` (bytea), а не в репозитории (там ФИО и в/ч). Обновить бланк:
+  `python scripts/upload_template.py "<файл.xlsx>"`. Машины ищутся по первым
+  цифрам номера; отсутствующие в шаблоне добавляются строками; машины без
+  выездов попадают в отчёт с остатком в баке. Настройки шапки — `UNIT_NAME`,
+  `SUBDIVISION`, `ACCOUNTABLE_PERSON` (если пусты, остаются значения бланка).
 - JS должен работать на старых webview: не использовать `flatMap`, `??`, `AbortController` без проверки.
 - После тестов чистить тестовые данные (`waybills`, `app_users`, `activity_log`).
 - Кэш Telegram: страницы отдают `Cache-Control: no-store`; при изменении админки менять параметр версии в редиректе `/admin?v=N#just` в `index.html`.
