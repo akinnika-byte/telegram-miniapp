@@ -20,6 +20,7 @@
     --hint: var(--tg-theme-hint-color, #94a0b8);
     --line: rgba(126, 140, 170, .22);
     --accent: #f2a63b;
+    --accent-fill: #f2a63b;
     --accent-ink: #1c1305;
     --accent-soft: rgba(242, 166, 59, .14);
     --link: #f5b455;
@@ -37,6 +38,9 @@
     --text: var(--tg-theme-text-color, #101828);
     --hint: var(--tg-theme-hint-color, #667085);
     --line: rgba(16, 24, 40, .12);
+    --accent: #b26a00;
+    --accent-fill: #f2a63b;
+    --accent-soft: rgba(178, 106, 0, .10);
     --link: #a36400;
     --ok: #0e9f6e; --ok-soft: rgba(14, 159, 110, .12);
     --bad: #d92d20; --bad-soft: rgba(217, 45, 32, .1);
@@ -78,7 +82,7 @@
   .app-name { font-size: 13px; font-weight: 700; letter-spacing: .16em; color: var(--hint); text-transform: uppercase; }
   .dots { display: flex; justify-content: center; gap: 16px; margin: 24px 0 4px; }
   .dot { width: 15px; height: 15px; border-radius: 50%; border: 2px solid var(--line); transition: transform .2s var(--ease), background .16s, border-color .16s; }
-  .dot.filled { background: var(--accent); border-color: var(--accent); transform: scale(1.2); }
+  .dot.filled { background: var(--accent-fill); border-color: var(--accent-fill); transform: scale(1.2); }
   .err { color: var(--bad); text-align: center; font-size: 13.5px; min-height: 22px; margin: 8px 0 10px; font-weight: 600; }
   .err.shake { animation: shake .38s var(--ease); }
   @keyframes shake { 0%,100% { transform: translateX(0); } 20% { transform: translateX(-7px); } 40% { transform: translateX(6px); } 60% { transform: translateX(-4px); } 80% { transform: translateX(3px); } }
@@ -162,7 +166,7 @@
   .btn { width: 100%; height: 54px; border: none; border-radius: var(--r-md); font-size: 16px; font-weight: 700;
          letter-spacing: -.01em; cursor: pointer; transition: transform .1s var(--ease), opacity .16s; }
   .btn:active { transform: scale(.985); }
-  .btn.primary { background: var(--accent); color: var(--accent-ink); box-shadow: 0 12px 26px rgba(242, 166, 59, .22); }
+  .btn.primary { background: var(--accent-fill); color: var(--accent-ink); box-shadow: 0 12px 26px rgba(242, 166, 59, .22); }
   .btn.ghost { background: transparent; color: var(--link); border: 1.5px solid var(--line); }
   .btn:disabled { opacity: .55; box-shadow: none; }
   .btn + .btn { margin-top: 10px; }
@@ -172,7 +176,7 @@
   .chip { flex: 0 0 auto; padding: 8px 14px; border-radius: 999px; border: 1.5px solid var(--line);
           background: transparent; color: var(--hint); font-size: 13px; font-weight: 600; cursor: pointer;
           transition: background .16s, color .16s, border-color .16s; }
-  .chip.active { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+  .chip.active { background: var(--accent-fill); color: var(--accent-ink); border-color: var(--accent); }
 
   /* ---- Хронология машины ---- */
   .timeline { display: flex; align-items: stretch; overflow-x: auto; padding: 10px 2px 18px; scrollbar-width: none; }
@@ -197,12 +201,12 @@
           border-radius: 50%; margin: 40px auto; animation: sp .9s linear infinite; }
   @keyframes sp { to { transform: rotate(360deg); } }
   .empty { text-align: center; color: var(--hint); padding: 34px 12px; font-size: 14px; line-height: 1.55; }
-  .toast { position: fixed; left: 50%; bottom: calc(22px + env(safe-area-inset-bottom));
+  .toast { position: fixed; left: 50%; bottom: calc(22px + env(safe-area-inset-bottom)); opacity: 0; pointer-events: none;
            transform: translateX(-50%) translateY(150%); z-index: 950;
            background: #101828; color: #fff; padding: 13px 20px; border-radius: 14px; font-size: 14px;
            font-weight: 500; max-width: 88%; text-align: center; box-shadow: 0 16px 40px rgba(0, 0, 0, .35);
-           transition: transform .38s var(--ease); }
-  .toast.show { transform: translateX(-50%) translateY(0); }
+           transition: transform .38s var(--ease), opacity .2s; }
+  .toast.show { transform: translateX(-50%) translateY(0); opacity: 1; }
 
   /* ---- Страница расчёта ---- */
   .status { display: flex; align-items: center; gap: 14px; text-align: left; border-radius: var(--r-lg);
@@ -247,7 +251,7 @@
   .wheel-item .ico { font-size: 22px; line-height: 1; color: var(--accent); }
   .wheel-item .ico svg { width: 22px; height: 22px; display: block; }
   .wheel-dot { position: absolute; width: 56px; height: 56px; margin: -28px 0 0 -28px;
-               border-radius: 50%; background: var(--accent); color: var(--accent-ink);
+               border-radius: 50%; background: var(--accent-fill); color: var(--accent-ink);
                display: flex; align-items: center; justify-content: center;
                font-weight: 800; font-size: 13px; font-family: var(--mono); letter-spacing: .04em;
                box-shadow: 0 0 0 7px rgba(242, 166, 59, .16); }
@@ -626,7 +630,10 @@ async function refreshAll() {
 
 async function startPanel() {
   $("role-title").textContent = session.role_title || "Администратор";
-  $("who").textContent = session.name || "";
+  const whoName = (session.name || "").trim();
+  const whoRole = (session.role_title || "Администратор").trim();
+  $("who").textContent = whoName && whoName !== whoRole ? whoName : "";
+  $("who").style.display = whoName && whoName !== whoRole ? "" : "none";
   show("scr-menu");
   try {
     await loadPeriods();
