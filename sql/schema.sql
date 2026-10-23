@@ -14,6 +14,7 @@ create table if not exists vehicles (
     model           text not null default '',
     fuel_norm       numeric(6,2)  not null default 0,      -- л / 100 км
     motohour_norm   numeric(6,2)  not null default 0,      -- л / моточас
+    motohours_absent boolean not null default false,        -- моточасы не учитываются
     tank_capacity   numeric(6,2)  not null default 0,
     fuel_type       text not null default 'diesel',         -- diesel | petrol
     is_active       boolean not null default true,
@@ -232,6 +233,7 @@ alter table vehicles add column if not exists sts_expires             date;
 alter table vehicles add column if not exists diagnostic_card_expires date;
 alter table vehicles add column if not exists red_stripe_expires      date;
 alter table vehicles add column if not exists fuel_type text not null default 'diesel';
+alter table vehicles add column if not exists motohours_absent boolean not null default false;
 -- УАЗ (Патриот) — бензиновая техника
 update vehicles set fuel_type = 'petrol'
     where lower(model) like '%уаз%' or lower(model) like '%патриот%';

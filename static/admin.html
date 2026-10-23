@@ -173,6 +173,25 @@
   .mismatch ul { margin: 6px 0 10px; padding-left: 20px; }
   .mismatch .calc { margin-top: 6px; line-height: 1.7; }
   .mismatch .calc b { color: var(--accent); font-size: 16px; }
+
+  /* Колесо быстрых действий (долгое нажатие на машину) */
+  .wheel { position: fixed; inset: 0; z-index: 900; }
+  .wheel[hidden] { display: none; }
+  .wheel-back { position: absolute; inset: 0; background: rgba(6, 9, 16, .55); animation: wfade .16s ease-out; }
+  .wheel-item { position: absolute; width: 88px; height: 88px; margin: -44px 0 0 -44px;
+                border: 1.5px solid rgba(79,140,255,.5); border-radius: 50%;
+                background: var(--card); color: var(--text); cursor: pointer;
+                display: flex; flex-direction: column; align-items: center; justify-content: center;
+                gap: 3px; font-size: 12px; font-weight: 600; text-align: center; padding: 6px;
+                box-shadow: 0 10px 26px rgba(0,0,0,.45); animation: wpop .18s ease-out; }
+  .wheel-item .ico { font-size: 22px; line-height: 1; }
+  .wheel-dot { position: absolute; width: 54px; height: 54px; margin: -27px 0 0 -27px;
+               border-radius: 50%; background: var(--accent); color: var(--accent-text);
+               display: flex; align-items: center; justify-content: center;
+               font-weight: 800; font-size: 13px; letter-spacing: .3px;
+               box-shadow: 0 0 0 6px rgba(79,140,255,.18); }
+  @keyframes wpop { from { transform: scale(.4); opacity: 0 } to { transform: scale(1); opacity: 1 } }
+  @keyframes wfade { from { opacity: 0 } to { opacity: 1 } }
 </style>
 </head>
 <body>
@@ -368,6 +387,9 @@ window.addEventListener("unhandledrejection", function (ev) {
 
 </div>
 <div class="toast" id="toast"></div>
+<div class="wheel" id="wheel" hidden>
+  <div class="wheel-back" id="wheel-back"></div>
+</div>
 
 <script>
 const tg = window.Telegram && window.Telegram.WebApp ? window.Telegram.WebApp : null;
@@ -603,7 +625,8 @@ function renderReport() {
            <div class="fg-r"><span>Пробег</span><b>${nf(t.petrol.km)} км</b></div></div>
        </div>
        <div class="fg-total">Всего: получено <b>${nf(t.all.received)} л</b> · затрачено <b>${nf(t.all.spent)} л</b> · пробег <b>${nf(t.all.km)} км</b></div>
-     </div>` +
+     </div>
+     <div class="sub" style="margin:2px 4px 10px">Зажмите машину — меню: к машине, к водителю, остатки</div>` +
     data.groups.map(g => `
       <div class="card" data-key="${esc(g.plate)}">
         <div class="row" data-toggle>
@@ -634,6 +657,8 @@ function renderReport() {
           </div>`).join("")}</div>
       </div>`).join("");
   bindToggles(box);
+  box.querySelectorAll("[data-key] > [data-toggle]").forEach(r =>
+    bindLongPress(r, r.parentElement.dataset.key));
   box.querySelectorAll("[data-wb]").forEach(b => b.addEventListener("click", (e) => {
     e.stopPropagation();
     const item = findReportItem(b.dataset.wb);
@@ -739,9 +764,92 @@ function bindToggles(box) {
     const det = r.parentElement.querySelector(".detail");
     if (key && openCards.has(key)) det.classList.add("open");
     r.addEventListener("click", () => {
+      if (Date.now() < suppressClickUntil) return;
       det.classList.toggle("open");
       if (key) det.classList.contains("open") ? openCards.add(key) : openCards.delete(key);
     });
+  });
+}
+
+/* ---------- Колесо действий по машине (долгое нажатие) ---------- */
+let suppressClickUntil = 0;
+
+const WHEEL_ACTIONS = [
+  { icon: "🚚", label: "К машине", run: (plate) => {
+      const v = (cache.vehicles || []).find(x => String(x.plate) === plate);
+      if (!v) return toast("Машина не найдена");
+      openVehicleForm(v);
+    } },
+  { icon: "👤", label: "К водителю", run: (plate) => openDriverCard(plate) },
+  { icon: "🕘", label: "Остатки", run: (plate) => openChrono(plate) },
+];
+
+function closeWheel() {
+  const w = $("wheel");
+  if (!w) return;
+  w.hidden = true;
+  w.querySelectorAll(".wheel-item, .wheel-dot").forEach(n => n.remove());
+}
+
+function openWheel(plate, x, y) {
+  const w = $("wheel");
+  if (!w) return;
+  w.querySelectorAll(".wheel-item, .wheel-dot").forEach(n => n.remove());
+  w.hidden = false;
+  const pad = 54;
+  const radius = Math.max(92, Math.min(122, Math.min(window.innerWidth, window.innerHeight) * 0.3));
+  const cx = Math.min(Math.max(x, radius + pad), window.innerWidth - radius - pad);
+  const cy = Math.min(Math.max(y, radius + pad), window.innerHeight - radius - pad);
+  WHEEL_ACTIONS.forEach((it, i) => {
+    const a = (-90 + i * 120) * Math.PI / 180;
+    const b = document.createElement("button");
+    b.className = "wheel-item";
+    b.style.left = (cx + Math.cos(a) * radius) + "px";
+    b.style.top = (cy + Math.sin(a) * radius) + "px";
+    b.innerHTML = `<span class="ico">${it.icon}</span><span>${it.label}</span>`;
+    b.addEventListener("click", (ev) => {
+      ev.stopPropagation();
+      closeWheel();
+      it.run(plate);
+    });
+    w.appendChild(b);
+  });
+  const dot = document.createElement("div");
+  dot.className = "wheel-dot";
+  dot.style.left = cx + "px";
+  dot.style.top = cy + "px";
+  dot.textContent = plate;
+  w.appendChild(dot);
+}
+on("wheel-back", "click", closeWheel);
+document.addEventListener("keydown", (e) => { if (e.key === "Escape") closeWheel(); });
+
+function bindLongPress(el, plate) {
+  let timer = null, sx = 0, sy = 0, fired = false;
+  const stop = () => { if (timer) { clearTimeout(timer); timer = null; } };
+  el.addEventListener("touchstart", (e) => {
+    const t = e.touches[0];
+    sx = t.clientX; sy = t.clientY; fired = false;
+    stop();
+    timer = setTimeout(() => {
+      fired = true;
+      suppressClickUntil = Date.now() + 800;
+      if (navigator.vibrate) { try { navigator.vibrate(15); } catch (_) {} }
+      openWheel(plate, sx, sy);
+    }, 480);
+  }, { passive: true });
+  el.addEventListener("touchmove", (e) => {
+    const t = e.touches[0];
+    if (Math.abs(t.clientX - sx) > 14 || Math.abs(t.clientY - sy) > 14) stop();
+  }, { passive: true });
+  el.addEventListener("touchend", (e) => {
+    stop();
+    if (fired) { e.preventDefault(); suppressClickUntil = Date.now() + 800; }
+  });
+  el.addEventListener("touchcancel", stop);
+  el.addEventListener("contextmenu", (e) => {
+    e.preventDefault();
+    openWheel(plate, e.clientX || window.innerWidth / 2, e.clientY || window.innerHeight / 2);
   });
 }
 
@@ -797,8 +905,9 @@ function renderVehicles(box, mode) {
   if (!list.length) { box.innerHTML = '<div class="empty">Машин нет</div>'; return; }
   box.innerHTML = list.map(v => {
     const fuelLabel = v.fuel_type === "petrol" ? "бензин" : "дизель";
+    const motoText = v.motohours_absent ? "—" : numStr(v.motohour_norm);
     const nums = mode === "norms"
-      ? `<div class="kv"><span>Норма: <b>${numStr(v.fuel_norm)} л/100км</b></span><span>Моточас: <b>${numStr(v.motohour_norm)}</b></span>
+      ? `<div class="kv"><span>Норма: <b>${numStr(v.fuel_norm)} л/100км</b></span><span>Моточас: <b>${motoText}</b></span>
          <span>Бак: <b>${numStr(v.tank_capacity)} л</b></span><span>${fuelLabel}</span></div>`
       : `<div class="meta">${esc(v.model)}${v.driver_name ? " · " + esc(v.driver_name) : ""} · ${fuelLabel}</div>
          <div class="kv" style="margin-top:6px">
@@ -969,22 +1078,44 @@ function openVehicleForm(v) {
         if (type === "date" && val) val = String(val).slice(0, 10);
         if (type === "decimal" || type === "numeric") val = numStr(val);
         const im = type === "date" ? "" : (type === "decimal" ? 'inputmode="decimal"' : (type === "numeric" ? 'inputmode="numeric"' : ""));
-        return `<div class="field"><label>${label}</label><input id="vf-${key}" type="${type === "date" ? "date" : "text"}" ${im} value="${esc(val)}" /></div>`;
+        const input = `<input id="vf-${key}" type="${type === "date" ? "date" : "text"}" ${im} value="${esc(val)}" />`;
+        if (key === "motohour_norm") {
+          const off = !!(v && v.motohours_absent);
+          return `<div class="field"><label>${label}</label>
+            <input id="vf-motohour_norm" type="text" inputmode="decimal" value="${esc(val)}"${off ? " disabled" : ""} />
+            <label style="display:flex;align-items:center;gap:8px;margin-top:8px;font-weight:400">
+              <input type="checkbox" id="vf-motohours_absent" style="width:auto"${off ? " checked" : ""} />
+              <span>Моточасы отсутствуют</span>
+            </label>
+          </div>`;
+        }
+        return `<div class="field"><label>${label}</label>${input}</div>`;
       }).join("")}</div>
     </div>`).join("");
+  const motoChk = $("vf-motohours_absent");
+  if (motoChk) {
+    motoChk.addEventListener("change", () => {
+      const inp = $("vf-motohour_norm");
+      if (!inp) return;
+      inp.disabled = motoChk.checked;
+      if (motoChk.checked) inp.value = "";
+    });
+  }
   show("scr-form");
 }
 on("veh-add", "click", () => { openVehicleForm(null); });
 on("form-cancel", "click", () => { show("scr-vehicles"); renderVehicles($("vehicles-body"), "full"); });
 on("form-save", "click", async () => {
   const body = { id: editing ? editing.id : null, is_active: true };
-  FORM_FIELDS.forEach(([key, label, type]) => {
+  FORM_FIELDS.forEach(([key]) => {
     const el = $("vf-" + key);
-    let val = el ? el.value : "";
-    if ((type === "decimal" || type === "numeric") && String(val).trim() === "") val = "0";
-    body[key] = val;
+    body[key] = el ? el.value : "";
   });
+  // «Моточасы отсутствуют» — норма обнуляется
+  body.motohours_absent = $("vf-motohours_absent") ? $("vf-motohours_absent").checked : false;
+  if (body.motohours_absent) body.motohour_norm = "0";
   if (!body.plate || !/^\d{4}$/.test(body.plate)) return toast("ГРЗ — ровно 4 цифры");
+  if (!String(body.model || "").trim()) return toast("Укажите марку (модель) машины");
   try {
     await api("/api/admin/vehicles/save", { method: "POST", body: JSON.stringify(body) });
     toast("Сохранено ✓");

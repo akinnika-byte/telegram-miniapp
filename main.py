@@ -23,7 +23,7 @@ from fastapi import Depends, FastAPI, Header, HTTPException, Request, Response
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from psycopg.types.json import Jsonb
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
 
 from config import (
     ADMIN_ROLES,
@@ -128,6 +128,7 @@ class VehicleIn(BaseModel):
     model: str = ""
     fuel_norm: float = 0
     motohour_norm: float = 0
+    motohours_absent: bool = False
     tank_capacity: float = 0
     fuel_type: str = "diesel"
     is_active: bool = True
@@ -141,6 +142,18 @@ class VehicleIn(BaseModel):
     sts_expires: Optional[str] = None
     diagnostic_card_expires: Optional[str] = None
     red_stripe_expires: Optional[str] = None
+
+    @field_validator("fuel_norm", "motohour_norm", "tank_capacity", mode="before")
+    @classmethod
+    def _blank_to_zero(cls, value):
+        """Пустое поле в форме считается нулём, а не ошибкой."""
+        if value is None:
+            return 0
+        if isinstance(value, str) and not value.strip().replace(",", "."):
+            return 0
+        if isinstance(value, str):
+            return value.strip().replace(",", ".")
+        return value
 
 
 class SqlIn(BaseModel):
@@ -1237,12 +1250,16 @@ def admin_vehicle_save(payload: VehicleIn, user: dict = Depends(require_admin)) 
     plate = (payload.plate or "").strip()
     if not plate.isdigit() or len(plate) != 4:
         raise HTTPException(status_code=400, detail="ГРЗ — ровно 4 цифры")
+    model = (payload.model or "").strip()
+    if not model:
+        raise HTTPException(status_code=400, detail="Укажите марку (модель) машины")
 
     data = {
         "plate": plate,
-        "model": payload.model or "",
+        "model": model,
         "fuel_norm": payload.fuel_norm,
-        "motohour_norm": payload.motohour_norm,
+        "motohour_norm": 0 if payload.motohours_absent else payload.motohour_norm,
+        "motohours_absent": payload.motohours_absent,
         "tank_capacity": payload.tank_capacity,
         "fuel_type": (payload.fuel_type or "diesel"),
         "is_active": payload.is_active,
@@ -1265,7 +1282,9 @@ def admin_vehicle_save(payload: VehicleIn, user: dict = Depends(require_admin)) 
                 """
                 update vehicles set
                     plate=%(plate)s, model=%(model)s, fuel_norm=%(fuel_norm)s,
-                    motohour_norm=%(motohour_norm)s, tank_capacity=%(tank_capacity)s,
+                    motohour_norm=%(motohour_norm)s,
+                    motohours_absent=%(motohours_absent)s,
+                    tank_capacity=%(tank_capacity)s,
                     fuel_type=%(fuel_type)s,
                     is_active=%(is_active)s, vin=%(vin)s, engine_no=%(engine_no)s,
                     chassis_no=%(chassis_no)s, driver_name=%(driver_name)s,
@@ -1285,12 +1304,13 @@ def admin_vehicle_save(payload: VehicleIn, user: dict = Depends(require_admin)) 
             row = conn.execute(
                 """
                 insert into vehicles
-                    (plate, model, fuel_norm, motohour_norm, tank_capacity,
-                     fuel_type, is_active, vin, engine_no, chassis_no, driver_name,
-                     driver_rank, driver_position, driver_license,
+                    (plate, model, fuel_norm, motohour_norm, motohours_absent,
+                     tank_capacity, fuel_type, is_active, vin, engine_no, chassis_no,
+                     driver_name, driver_rank, driver_position, driver_license,
                      sts_expires, diagnostic_card_expires, red_stripe_expires)
                 values
                     (%(plate)s, %(model)s, %(fuel_norm)s, %(motohour_norm)s,
+                     %(motohours_absent)s,
                      %(tank_capacity)s, %(fuel_type)s, %(is_active)s, %(vin)s,
                      %(engine_no)s,
                      %(chassis_no)s, %(driver_name)s, %(driver_rank)s,
@@ -1300,6 +1320,7 @@ def admin_vehicle_save(payload: VehicleIn, user: dict = Depends(require_admin)) 
                 on conflict (plate) do update set
                     model=excluded.model, fuel_norm=excluded.fuel_norm,
                     motohour_norm=excluded.motohour_norm,
+                    motohours_absent=excluded.motohours_absent,
                     tank_capacity=excluded.tank_capacity,
                     fuel_type=excluded.fuel_type, is_active=excluded.is_active,
                     vin=excluded.vin, engine_no=excluded.engine_no,
@@ -1408,6 +1429,8 @@ def admin_migrate(user: dict = Depends(require_admin)) -> dict:
         "on waybills(vehicle_id, waybill_date desc nulls last, created_at desc)",
         "alter table vehicles add column if not exists fuel_type "
         "text not null default 'diesel'",
+        "alter table vehicles add column if not exists motohours_absent "
+        "boolean not null default false",
         "update vehicles set fuel_type = 'petrol' where lower(model) like '%уаз%' "
         "or lower(model) like '%патриот%'",
         "update waybills set waybill_date = created_at::date "

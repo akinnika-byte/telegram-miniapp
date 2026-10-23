@@ -331,7 +331,7 @@ window.addEventListener("unhandledrejection", function (ev) {
       <div class="field"><label>Получено топлива, л</label><input id="f-fuel_in" inputmode="decimal" placeholder="0" /></div>
       <div class="field"><label>Бак на конец, л</label><input id="f-tank_end" inputmode="decimal" placeholder="0" /></div>
       <div class="field"><label>Затрачено топлива, л</label><input id="f-fuel_spent" inputmode="decimal" placeholder="0" /></div>
-      <div class="field"><label>Моточасы</label><input id="f-motohours" inputmode="decimal" placeholder="0" /></div>
+      <div class="field" id="row-motohours"><label>Моточасы</label><input id="f-motohours" inputmode="decimal" placeholder="0" /></div>
     </div>
   </div>
   <button class="btn primary" id="btn-check">Проверить и отправить</button>
@@ -497,7 +497,7 @@ async function submitPin() {
       if (data.token) setToken(data.token);
     }
     if (data.kind === "admin") {
-      window.location.href = IN_TELEGRAM ? "/admin?v=8#just" : "/admin";
+      window.location.href = IN_TELEGRAM ? "/admin?v=9#just" : "/admin";
       return;
     }
     vehicle = data.vehicle;
@@ -557,12 +557,15 @@ async function openForm(rec, opts = {}) {
   $("v-plate").textContent = vehicle.plate;
   $("v-model").textContent = vehicle.model || "—";
   $("v-norm").textContent = numStr(vehicle.fuel_norm);
-  $("v-moto").textContent = numStr(vehicle.motohour_norm);
+  $("v-moto").textContent = vehicle.motohours_absent ? "нет" : numStr(vehicle.motohour_norm);
   $("f-waybill").value = rec ? rec.waybill_no : "";
   $("f-date").value = (rec && rec.waybill_date)
     ? String(rec.waybill_date).slice(0, 10)
     : new Date().toISOString().slice(0, 10);
   FIELD_IDS.forEach(f => $("f-" + f).value = rec && rec[f] != null ? numStr(rec[f]) : "");
+  const noMoto = !!(vehicle && vehicle.motohours_absent);
+  if ($("row-motohours")) $("row-motohours").style.display = noMoto ? "none" : "";
+  if (noMoto) $("f-motohours").value = "0";
   $("form-continuity").style.display = "none";
   show("scr-form");
 
@@ -647,7 +650,7 @@ async function loadVehicle() {
       <div class="card vehicle">
         <div class="plate">${esc(v.plate)}</div>
         <div class="meta"><div>Модель: <b>${esc(v.model || "—")}</b></div>
-        <div>Норма: <b>${numStr(v.fuel_norm)}</b> л/100км · <b>${numStr(v.motohour_norm)}</b> л/моточас</div></div>
+        <div>Норма: <b>${numStr(v.fuel_norm)}</b> л/100км · <b>${v.motohours_absent ? "нет" : numStr(v.motohour_norm)}</b> л/моточас</div></div>
       </div>
       <div class="card">
         <h3>📍 Сейчас — по последнему путевому</h3>
