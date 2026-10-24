@@ -573,7 +573,7 @@ async function submitPin() {
       if (data.token) setToken(data.token);
     }
     if (data.kind === "admin") {
-      window.location.href = IN_TELEGRAM ? "/admin?v=12#just" : "/admin";
+      window.location.href = IN_TELEGRAM ? "/admin?v=13#just" : "/admin";
       return;
     }
     vehicle = data.vehicle;
@@ -586,7 +586,11 @@ async function submitPin() {
     if (!IN_TELEGRAM) setToken("");
     buzz("error");
     show("scr-lock");
-    $("pin-error").textContent = e.message;
+    const pe = $("pin-error");
+    pe.textContent = e.message;
+    pe.classList.remove("shake");
+    void pe.offsetWidth;
+    pe.classList.add("shake");
     pin = ""; renderDots();
   } finally {
     clearTimeout(hint);

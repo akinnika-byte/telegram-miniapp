@@ -557,7 +557,14 @@ async function login() {
     if (data.kind === "driver") { window.location.href = "/"; return; }
     session = await api("/api/session", { method: "POST" });
     await startPanel();
-  } catch (e) { $("err").textContent = e.message; pin = ""; renderDots(); }
+  } catch (e) {
+    const ee = $("err");
+    ee.textContent = e.message;
+    ee.classList.remove("shake");
+    void ee.offsetWidth;
+    ee.classList.add("shake");
+    pin = ""; renderDots();
+  }
 }
 on("logout", "click", async () => {
   const b = $("logout");
