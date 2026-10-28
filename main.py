@@ -1048,12 +1048,14 @@ def admin_export(
                 select tank_end
                 from waybills w
                 where w.vehicle_id = v.id
+                  and w.waybill_date < %s
                 order by w.waybill_date desc nulls last, w.id desc
                 limit 1
             ) ls on true
             where v.is_active
             order by v.plate
-            """
+            """,
+            (period["start_date"],),
         ).fetchall()
 
         period_rows = conn.execute(
@@ -1062,7 +1064,10 @@ def admin_export(
                    sum(w.km_total_odo) as km,
                    sum(w.fuel_in) as fuel_in,
                    sum(w.fuel_spent) as fuel_spent,
-                   (array_agg(w.tank_start order by w.waybill_date nulls last, w.id))[1] as tank_start
+                   -- остаток на начало месяца — бак перед выездом по самому
+                   -- первому путевому (порядок по одометру, как в desktop-версии)
+                   (array_agg(w.tank_start order by w.km_start nulls last,
+                                                 w.waybill_date nulls last, w.id))[1] as tank_start
             from waybills w
             where w.period_id = %s
             group by w.plate
