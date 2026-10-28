@@ -1313,13 +1313,14 @@ function psgHint() {
   const el = $("psg-hint");
   if (!el) return;
   const calc = Math.round((psgNum("psg-start") + psgNum("psg-in") - psgNum("psg-spent")) * 100) / 100;
-  const end = psgNum("psg-end");
-  if (!end && !calc) {
-    el.textContent = "Остаток по расчёту: —";
+  const endEl = $("psg-end");
+  const endRaw = endEl ? String(endEl.value || "").trim() : "";
+  if (!endRaw) {
+    el.textContent = calc ? "Остаток по расчёту: " + nf(calc) + " л" : "Остаток по расчёту: —";
     el.style.color = "";
     return;
   }
-  const diff = Math.round((end - calc) * 100) / 100;
+  const diff = Math.round((psgNum("psg-end") - calc) * 100) / 100;
   el.textContent = "Остаток по расчёту: " + nf(calc) + " л" +
     (Math.abs(diff) <= 0.5 ? " · сходится" : " · расхождение " + nf(diff) + " л");
   el.style.color = Math.abs(diff) <= 0.5 ? "var(--ok)" : "var(--bad)";
