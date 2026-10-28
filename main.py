@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import hashlib
 import hmac
+import os
 import secrets
 import time
 from collections import deque
@@ -36,7 +37,7 @@ from config import (
 from db import db
 from periods import period_for_date
 from security import InitDataError, validate_init_data
-from waybill import compute
+from waybill import EPS, compute
 from export_excel import build_rasshifrovka
 
 app = FastAPI(title="АВТР(ПГ) — проверка путевой документации")
@@ -154,6 +155,16 @@ class VehicleIn(BaseModel):
         if isinstance(value, str):
             return value.strip().replace(",", ".")
         return value
+
+
+class PsgIn(BaseModel):
+    """Учёт топлива по ЗИЛ ПСГ (без пробега)."""
+    date: str
+    waybill_no: str
+    tank_start: float = 0
+    fuel_in: float = 0
+    fuel_spent: float = 0
+    tank_end: float = 0
 
 
 class SqlIn(BaseModel):
@@ -325,6 +336,8 @@ def waybill_mark(row: Any) -> Optional[str]:
     «дозаправка» — топливо получили, но не ездили и не тратили;
     «не использована» — ни пробега, ни топлива, ни моточасов.
     """
+    if row.get("is_special"):
+        return None
     km = float(row.get("km_total_odo") or 0)
     if km <= 0:
         km = float(row.get("km_empty") or 0) + float(row.get("km_loaded") or 0)
@@ -625,7 +638,7 @@ def driver_waybills(user: dict = Depends(current_user)) -> list:
             select w.id, w.waybill_no, w.plate, w.created_at, w.waybill_date,
                    w.km_start, w.km_end, w.km_empty, w.km_loaded,
                    w.tank_start, w.fuel_in, w.tank_end, w.fuel_spent, w.motohours,
-                   w.km_total_odo, w.fuel_calc, w.is_ok, w.is_corrected,
+                   w.km_total_odo, w.fuel_calc, w.is_ok, w.is_corrected, w.is_special,
                    p.name as period_name
             from waybills w
             join periods p on p.id = w.period_id
@@ -846,6 +859,110 @@ def waybill_delete(waybill_id: int, user: dict = Depends(require_admin)) -> dict
     return {"ok": True, "id": waybill_id}
 
 
+# Машина учёта топлива «ЗИЛ ПСГ» и исключения из расшифровки
+PSG_PLATE = os.getenv("PSG_PLATE", "9205")
+REPORT_EXCLUDE = ("прицеп", "ппц", "мнуг", "урал")
+
+
+@app.post("/api/admin/psg")
+def admin_psg_save(payload: PsgIn, user: dict = Depends(require_admin)) -> dict:
+    """ЗИЛ ПСГ: приход/расход топлива и остатки — без пробега.
+
+    Доступно только администратору (код 6666).
+    """
+    if user.get("role") != "owner":
+        raise HTTPException(status_code=403, detail="Доступно только администратору")
+
+    wb_no = (payload.waybill_no or "").strip()
+    if not wb_no:
+        raise HTTPException(status_code=400, detail="Укажите номера путевых")
+
+    wb_date = parse_date(payload.date)
+
+    with db() as conn:
+        vehicle = find_vehicle(conn, PSG_PLATE)
+        period = period_for_date(conn, wb_date)
+        if not period:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Для даты {wb_date.isoformat()} не задан отчётный период",
+            )
+
+        dupe = conn.execute(
+            "select plate from waybills where waybill_no = %s and period_id = %s",
+            (wb_no, period["id"]),
+        ).fetchone()
+        if dupe:
+            raise HTTPException(
+                status_code=409,
+                detail=f"Путевой №{wb_no} уже внесён (машина {dupe['plate']})",
+            )
+
+        tank_start = round(float(payload.tank_start or 0), 2)
+        fuel_in = round(float(payload.fuel_in or 0), 2)
+        fuel_spent = round(float(payload.fuel_spent or 0), 2)
+        tank_end = round(float(payload.tank_end or 0), 2)
+        tank_calc = round(tank_start + fuel_in - fuel_spent, 2)
+        tank_ok = abs(tank_calc - tank_end) <= EPS
+
+        row = conn.execute(
+            """
+            insert into waybills (
+                period_id, vehicle_id, plate, model, waybill_no, waybill_date,
+                km_start, km_end, km_empty, km_loaded,
+                tank_start, fuel_in, tank_end, fuel_spent, motohours,
+                fuel_norm_snapshot, motohour_norm_snapshot,
+                p1, p2, h, fuel_calc,
+                km_total_odo, km_total_input, tank_end_calc,
+                km_ok, tank_ok, fuel_ok, is_ok, is_special,
+                created_by_telegram_id, created_by_name
+            ) values (
+                %(period_id)s, %(vehicle_id)s, %(plate)s, %(model)s, %(wb_no)s,
+                %(wb_date)s,
+                0, 0, 0, 0,
+                %(tank_start)s, %(fuel_in)s, %(tank_end)s, %(fuel_spent)s, 0,
+                0, 0,
+                0, 0, 0, 0,
+                0, 0, %(tank_calc)s,
+                true, %(tank_ok)s, true, %(tank_ok)s, true,
+                %(tg_id)s, %(who)s
+            )
+            returning id, created_at
+            """,
+            {
+                "period_id": period["id"],
+                "vehicle_id": vehicle["id"],
+                "plate": vehicle["plate"],
+                "model": vehicle["model"],
+                "wb_no": wb_no,
+                "wb_date": wb_date,
+                "tank_start": tank_start,
+                "fuel_in": fuel_in,
+                "tank_end": tank_end,
+                "fuel_spent": fuel_spent,
+                "tank_calc": tank_calc,
+                "tank_ok": tank_ok,
+                "tg_id": user["telegram_id"],
+                "who": actor_display(conn, user, vehicle["plate"]),
+            },
+        ).fetchone()
+
+        log_action(
+            conn, user, "create_waybill", "waybill", row["id"],
+            {"plate": vehicle["plate"], "waybill_no": wb_no,
+             "period": period["name"], "psg": True},
+            plate=vehicle["plate"],
+        )
+
+    return {
+        "id": row["id"],
+        "period": period,
+        "tank_calc": tank_calc,
+        "tank_ok": tank_ok,
+        "plate": vehicle["plate"],
+    }
+
+
 @app.get("/api/last-state")
 def last_state(plate: str, user: dict = Depends(current_user)) -> dict:
     """Последнее состояние машины — для автозаполнения следующего путевого.
@@ -982,6 +1099,7 @@ def admin_report(period_id: int, user: dict = Depends(require_admin)) -> dict:
             "total_km": float(r["km_total_odo"]),
             "is_ok": r["is_ok"],
             "is_corrected": r["is_corrected"],
+            "is_special": bool(r.get("is_special")),
             "mark": waybill_mark(r),
             "waybill_date": r["waybill_date"].isoformat() if r["waybill_date"] else None,
             "author": author,
@@ -1110,6 +1228,9 @@ def admin_export(
 
     items = []
     for v in sorted(vehicles, key=lambda x: sort_key(x["plate"])):
+        model_lc = (v["model"] or "").lower()
+        if any(word in model_lc for word in REPORT_EXCLUDE):
+            continue
         agg = aggregated.get(v["plate"])
         balance = float(v["last_tank_end"] or 0)
         if agg:
@@ -1165,7 +1286,8 @@ def admin_summary(period_id: int, user: dict = Depends(require_admin)) -> dict:
         records = conn.execute(
             """
             select id, plate, model, waybill_no, km_total_odo, km_empty, km_loaded,
-                   motohours, fuel_in, fuel_spent, fuel_calc, is_ok, is_corrected
+                   motohours, fuel_in, fuel_spent, fuel_calc, is_ok, is_corrected,
+                   is_special
             from waybills
             where period_id = %s
             order by plate, km_start nulls last, tank_start nulls last, id
@@ -1197,6 +1319,7 @@ def admin_summary(period_id: int, user: dict = Depends(require_admin)) -> dict:
             "fuel_calc": float(r["fuel_calc"]),
             "is_ok": r["is_ok"],
             "is_corrected": r["is_corrected"],
+            "is_special": bool(r.get("is_special")),
             "mark": waybill_mark(r),
         })
 
@@ -1419,7 +1542,7 @@ def admin_vehicle_waybills(plate: str, user: dict = Depends(require_admin)) -> l
             select w.id, w.waybill_no, w.plate, w.created_at, w.waybill_date,
                    w.km_start, w.km_end, w.km_empty, w.km_loaded,
                    w.tank_start, w.fuel_in, w.tank_end, w.fuel_spent, w.motohours,
-                   w.km_total_odo, w.fuel_calc, w.is_ok, w.is_corrected,
+                   w.km_total_odo, w.fuel_calc, w.is_ok, w.is_corrected, w.is_special,
                    p.name as period_name
             from waybills w
             join periods p on p.id = w.period_id
@@ -1488,6 +1611,8 @@ def admin_migrate(user: dict = Depends(require_admin)) -> dict:
         "alter table waybills add column if not exists waybill_date date",
         "alter table waybills add column if not exists created_by_name text",
         "alter table waybills add column if not exists corrected_by_name text",
+        "alter table waybills add column if not exists is_special "
+        "boolean not null default false",
         "create index if not exists idx_waybills_vehicle_date "
         "on waybills(vehicle_id, waybill_date desc nulls last, created_at desc)",
         "alter table vehicles add column if not exists fuel_type "

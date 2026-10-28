@@ -329,6 +329,7 @@ window.addEventListener("unhandledrejection", function (ev) {
     <div class="topbar"><button class="link" data-back>← Меню</button><h2 style="margin:0">Отчёт</h2></div>
     <select id="sel-report"></select>
     <button class="btn primary" id="wb-add" style="margin-bottom:10px">Добавить путевой</button>
+    <button class="btn ghost" id="psg-add" style="margin-bottom:10px;display:none">Добавить ЗИЛ ПСГ</button>
     <button class="btn ghost" id="wb-export" style="margin-bottom:12px">Расшифровка · Excel</button>
     <div id="report-body"><div class="spin"></div></div>
   </div>
@@ -446,6 +447,23 @@ window.addEventListener("unhandledrejection", function (ev) {
       <p class="sub" style="margin:0">Если такой номер уже есть в выбранном отчёте — предупредим.</p>
     </div>
     <button class="btn primary" id="add-next">Далее</button>
+  </div>
+
+  <!-- ЗИЛ ПСГ: учёт топлива без пробега (только администратор) -->
+  <div class="screen" id="scr-psg">
+    <div class="topbar"><button class="link" data-backto="scr-report">← Отчёт</button><h2 style="margin:0">ЗИЛ ПСГ</h2></div>
+    <div class="card" style="padding:16px">
+      <div class="grid2">
+        <div class="field"><label>Дата</label><input id="psg-date" type="date" /></div>
+        <div class="field"><label>Номера путевых</label><input id="psg-nos" placeholder="напр. 123, 124" /></div>
+        <div class="field"><label>Бак на начало, л</label><input id="psg-start" inputmode="decimal" placeholder="0" /></div>
+        <div class="field"><label>Получено, л</label><input id="psg-in" inputmode="decimal" placeholder="0" /></div>
+        <div class="field"><label>Израсходовано, л</label><input id="psg-spent" inputmode="decimal" placeholder="0" /></div>
+        <div class="field"><label>Бак на конец, л</label><input id="psg-end" inputmode="decimal" placeholder="0" /></div>
+      </div>
+      <p class="sub" id="psg-hint" style="margin:0">Остаток по расчёту: —</p>
+    </div>
+    <button class="btn primary" id="psg-save">Сохранить</button>
   </div>
 
 </div>
@@ -620,6 +638,8 @@ async function startPanel() {
   const whoRole = (session.role_title || "Администратор").trim();
   $("who").textContent = whoName && whoName !== whoRole ? whoName : "";
   $("who").style.display = whoName && whoName !== whoRole ? "" : "none";
+  const isOwner = session.role === "owner";
+  if ($("psg-add")) $("psg-add").style.display = isOwner ? "" : "none";
   show("scr-menu");
   try {
     await loadPeriods();
@@ -711,7 +731,7 @@ function renderReport() {
         <div class="detail">${g.items.map((it, idx) => `
           <div class="item">
             <div class="head"><b>${idx + 1}. №${esc(it.waybill_no)}</b>
-              <span><span class="meta" style="margin-right:8px">${idx + 1} из ${g.items.length}${idx === 0 ? " · первый" : ""}${idx === g.items.length - 1 ? " · последний" : ""}</span>${it.mark ? `<span class="badge ${it.mark === "refuel" ? "fuel" : "idle"}">${it.mark === "refuel" ? "Дозаправка" : "Не использована"}</span> ` : ""}${it.is_corrected ? '<span class="badge warn">ИСПРАВЛЕН</span> ' : ""}<span class="badge ${it.is_ok ? "ok" : "bad"}">${it.is_ok ? "OK" : "РАСХОЖДЕНИЕ"}</span></span></div>
+              <span><span class="meta" style="margin-right:8px">${idx + 1} из ${g.items.length}${idx === 0 ? " · первый" : ""}${idx === g.items.length - 1 ? " · последний" : ""}</span>${it.is_special ? '<span class="badge fuel">ПСГ</span> ' : ""}${it.mark ? `<span class="badge ${it.mark === "refuel" ? "fuel" : "idle"}">${it.mark === "refuel" ? "Дозаправка" : "Не использована"}</span> ` : ""}${it.is_corrected ? '<span class="badge warn">ИСПРАВЛЕН</span> ' : ""}<span class="badge ${it.is_ok ? "ok" : "bad"}">${it.is_ok ? "OK" : "РАСХОЖДЕНИЕ"}</span></span></div>
             <div class="kv">
               <span>Бак на начало: <b>${nf(it.tank_start)} л</b></span>
               <span>Бак на конец: <b>${nf(it.tank_end)} л</b></span>
@@ -817,7 +837,7 @@ function renderSummary() {
           ${g.items.map(it => `
             <div class="item">
               <div class="head"><b>№${esc(it.waybill_no)}</b>
-                <span>${it.mark ? `<span class="badge ${it.mark === "refuel" ? "fuel" : "idle"}">${it.mark === "refuel" ? "Дозаправка" : "Не использована"}</span> ` : ""}${it.is_corrected ? '<span class="badge warn">ИСПРАВЛЕН</span> ' : ""}<span class="badge ${it.is_ok ? "ok" : "bad"}">${it.is_ok ? "OK" : "РАСХОЖДЕНИЕ"}</span></span></div>
+                <span>${it.is_special ? '<span class="badge fuel">ПСГ</span> ' : ""}${it.mark ? `<span class="badge ${it.mark === "refuel" ? "fuel" : "idle"}">${it.mark === "refuel" ? "Дозаправка" : "Не использована"}</span> ` : ""}${it.is_corrected ? '<span class="badge warn">ИСПРАВЛЕН</span> ' : ""}<span class="badge ${it.is_ok ? "ok" : "bad"}">${it.is_ok ? "OK" : "РАСХОЖДЕНИЕ"}</span></span></div>
               <div class="kv">
                 <span>Пробег: <b>${nf(it.total_km)} км</b></span>
                 <span>Получено: <b>${nf(it.fuel_in)} л</b></span>
@@ -1281,6 +1301,65 @@ on("wb-add", "click", () => {
   $("add-wbno").value = "";
   if ($("add-period")) $("add-period").value = currentPeriod || "";
   show("scr-add-wb");
+});
+
+/* ---------- ЗИЛ ПСГ: только приход/расход топлива и остатки ---------- */
+function psgNum(id) {
+  const el = $(id);
+  if (!el) return 0;
+  return parseFloat(String(el.value || "0").replace(",", ".")) || 0;
+}
+function psgHint() {
+  const el = $("psg-hint");
+  if (!el) return;
+  const calc = Math.round((psgNum("psg-start") + psgNum("psg-in") - psgNum("psg-spent")) * 100) / 100;
+  const end = psgNum("psg-end");
+  if (!end && !calc) {
+    el.textContent = "Остаток по расчёту: —";
+    el.style.color = "";
+    return;
+  }
+  const diff = Math.round((end - calc) * 100) / 100;
+  el.textContent = "Остаток по расчёту: " + nf(calc) + " л" +
+    (Math.abs(diff) <= 0.5 ? " · сходится" : " · расхождение " + nf(diff) + " л");
+  el.style.color = Math.abs(diff) <= 0.5 ? "var(--ok)" : "var(--bad)";
+}
+["psg-start", "psg-in", "psg-spent", "psg-end"].forEach(function (id) {
+  on(id, "input", psgHint);
+});
+on("psg-add", "click", () => {
+  $("psg-date").value = new Date().toISOString().slice(0, 10);
+  ["psg-nos", "psg-start", "psg-in", "psg-spent", "psg-end"].forEach(function (id) {
+    $(id).value = "";
+  });
+  psgHint();
+  show("scr-psg");
+});
+on("psg-save", "click", async () => {
+  const btn = $("psg-save");
+  const body = {
+    date: $("psg-date").value,
+    waybill_no: ($("psg-nos").value || "").trim(),
+    tank_start: psgNum("psg-start"),
+    fuel_in: psgNum("psg-in"),
+    fuel_spent: psgNum("psg-spent"),
+    tank_end: psgNum("psg-end"),
+  };
+  if (!body.waybill_no) return toast("Укажите номера путевых");
+  try {
+    btn.disabled = true;
+    btn.textContent = "Сохраняем…";
+    const res = await api("/api/admin/psg", { method: "POST", body: JSON.stringify(body) });
+    toast(res.tank_ok ? "Записано" : "Записано, остаток не сходится");
+    await refreshAll();
+    show("scr-report");
+    renderReport();
+  } catch (e) {
+    toast(e.message);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = "Сохранить";
+  }
 });
 on("wb-export", "click", async () => {
   if (!currentPeriod) return toast("Выберите период");

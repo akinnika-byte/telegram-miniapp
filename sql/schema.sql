@@ -133,6 +133,7 @@ create table if not exists waybills (
     is_corrected   boolean not null default false,          -- путевой исправляли
     corrected_at   timestamptz,
     waybill_date   date,                                    -- дата путевого (для отчёта)
+    is_special     boolean not null default false,          -- учёт топлива (ЗИЛ ПСГ), без пробега
 
     created_by_telegram_id bigint,
     created_by_name    text,                                -- кто внёс (ФИО водителя или роль админа)
@@ -251,6 +252,7 @@ alter table waybills add column if not exists corrected_at timestamptz;
 alter table waybills add column if not exists waybill_date date;
 alter table waybills add column if not exists created_by_name text;
 alter table waybills add column if not exists corrected_by_name text;
+alter table waybills add column if not exists is_special boolean not null default false;
 create index if not exists idx_waybills_vehicle_date
     on waybills(vehicle_id, waybill_date desc nulls last, created_at desc);
 update waybills set waybill_date = created_at::date where waybill_date is null;

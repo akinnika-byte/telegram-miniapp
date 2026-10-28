@@ -574,7 +574,7 @@ async function submitPin() {
       if (data.token) setToken(data.token);
     }
     if (data.kind === "admin") {
-      window.location.href = IN_TELEGRAM ? "/admin?v=14#just" : "/admin";
+      window.location.href = IN_TELEGRAM ? "/admin?v=15#just" : "/admin";
       return;
     }
     vehicle = data.vehicle;
@@ -701,7 +701,7 @@ async function loadHistory() {
     $("hist-list").innerHTML = rows.map(r => `
       <div class="hist">
         <div class="h"><b>Путевой №${esc(r.waybill_no)}</b>
-          <span>${r.mark ? `<span class="badge ${r.mark === "refuel" ? "fuel" : "idle"}">${r.mark === "refuel" ? "Дозаправка" : "Не использована"}</span> ` : ""}${r.is_corrected ? '<span class="badge corr">ИСПРАВЛЕН</span> ' : ""}<span class="badge ${r.is_ok ? "ok" : "bad"}">${r.is_ok ? "OK" : "РАСХОЖДЕНИЕ"}</span></span></div>
+          <span>${r.is_special ? '<span class="badge fuel">ПСГ</span> ' : ""}${r.mark ? `<span class="badge ${r.mark === "refuel" ? "fuel" : "idle"}">${r.mark === "refuel" ? "Дозаправка" : "Не использована"}</span> ` : ""}${r.is_corrected ? '<span class="badge corr">ИСПРАВЛЕН</span> ' : ""}<span class="badge ${r.is_ok ? "ok" : "bad"}">${r.is_ok ? "OK" : "РАСХОЖДЕНИЕ"}</span></span></div>
         <div class="muted" style="font-size:12px;margin-top:4px">${esc(r.period_name)} · ${dstr(r.waybill_date || r.created_at)}</div>
         <div class="kv">
           <span>Пробег: <b>${nf(r.km_total_odo)} км</b></span>

@@ -72,6 +72,44 @@ def _insert_rows(ws, index: int, amount: int) -> None:
         ws.row_dimensions[row + (amount if row >= index else 0)].height = height
 
 
+def _delete_rows(ws, index: int, amount: int) -> None:
+    """Удаление строк с сохранением объединений и высот."""
+    if amount <= 0:
+        return
+    heights = {
+        row: dim.height
+        for row, dim in ws.row_dimensions.items()
+        if dim.height is not None
+    }
+    merges = [
+        (m.min_col, m.min_row, m.max_col, m.max_row)
+        for m in ws.merged_cells.ranges
+    ]
+    for m in list(ws.merged_cells.ranges):
+        ws.unmerge_cells(str(m))
+
+    ws.delete_rows(index, amount)
+
+    for col_min, row_min, col_max, row_max in merges:
+        if row_min >= index + amount:
+            shift = -amount
+        elif row_min >= index:
+            continue  # объединение попало в удаляемый диапазон
+        else:
+            shift = 0
+        ws.merge_cells(
+            start_row=row_min + shift, end_row=row_max + shift,
+            start_column=col_min, end_column=col_max,
+        )
+
+    for row in list(ws.row_dimensions.keys()):
+        ws.row_dimensions[row].height = None
+    for row, height in heights.items():
+        if index <= row < index + amount:
+            continue
+        ws.row_dimensions[row - (amount if row >= index + amount else 0)].height = height
+
+
 def _copy_style(ws, src_row: int, dst_row: int) -> None:
     for col in range(1, LAST_COL + 1):
         src = ws.cell(row=src_row, column=col)
@@ -97,16 +135,6 @@ def _write_vehicle(ws, row: int, item: dict, *, write_label: bool = True) -> Non
     ws.cell(row=row, column=12).value = f"=E{row}+F{row}-G{row}"
 
 
-def _clear_vehicle_row(ws, row: int) -> None:
-    """Строка шаблона без данных: машина есть, но в базе её нет."""
-    ws.cell(row=row, column=4).value = 0
-    ws.cell(row=row, column=6).value = 0
-    ws.cell(row=row, column=7).value = 0
-    ws.cell(row=row, column=9).value = "-"
-    ws.cell(row=row, column=11).value = "-"
-    ws.cell(row=row, column=12).value = f"=E{row}"
-
-
 def _fill_block(ws, first_row: int, totals_row: int, items: list) -> int:
     """Заполняет раздел. Возвращает новую строку итогов."""
     template_rows: dict[str, list[int]] = {}
@@ -115,20 +143,30 @@ def _fill_block(ws, first_row: int, totals_row: int, items: list) -> int:
         if key:
             template_rows.setdefault(key, []).append(row)
 
-    matched: set[int] = set()
+    placement: list[tuple[int, dict]] = []
     pending: list[dict] = []
     for item in items:
         rows = template_rows.get(_digits(item.get("plate")) or "")
         if rows:
-            row = rows.pop(0)
-            matched.add(row)
-            _write_vehicle(ws, row, item, write_label=False)
+            placement.append((rows.pop(0), item))
         else:
             pending.append(item)
 
-    original_rows = set(range(first_row, totals_row))
-    for row in original_rows - matched:
-        _clear_vehicle_row(ws, row)
+    # Строки бланка, под которые нет машины (прицепы, уралы, чужие номера),
+    # из расшифровки убираем полностью.
+    keep = {row for row, _ in placement}
+    unmatched = sorted(set(range(first_row, totals_row)) - keep, reverse=True)
+    for row in unmatched:
+        _delete_rows(ws, row, 1)
+        totals_row -= 1
+
+    deleted = sorted(unmatched)
+
+    def new_index(old_row: int) -> int:
+        return old_row - sum(1 for row in deleted if row < old_row)
+
+    for old_row, item in placement:
+        _write_vehicle(ws, new_index(old_row), item, write_label=False)
 
     if pending:
         _insert_rows(ws, totals_row, len(pending))
