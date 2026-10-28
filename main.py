@@ -319,6 +319,23 @@ def parse_optional_date(value: Optional[str]) -> Optional[date]:
         raise HTTPException(status_code=400, detail="Неверный формат даты")
 
 
+def waybill_mark(row: Any) -> Optional[str]:
+    """Пометка для путевых без движения.
+
+    «дозаправка» — топливо получили, но не ездили и не тратили;
+    «не использована» — ни пробега, ни топлива, ни моточасов.
+    """
+    km = float(row.get("km_total_odo") or 0)
+    if km <= 0:
+        km = float(row.get("km_empty") or 0) + float(row.get("km_loaded") or 0)
+    fuel_in = float(row.get("fuel_in") or 0)
+    fuel_spent = float(row.get("fuel_spent") or 0)
+    motohours = float(row.get("motohours") or 0)
+    if km > 0 or fuel_spent > 0 or motohours > 0:
+        return None
+    return "refuel" if fuel_in > 0 else "unused"
+
+
 # --- Простая защита от перебора кодов (в памяти процесса) ---
 _login_fails: dict[str, list[float]] = {}
 
@@ -588,7 +605,7 @@ def driver_vehicle(user: dict = Depends(current_user)) -> dict:
         ls = conn.execute(
             "select km_end, tank_end, waybill_no, waybill_date from waybills "
             "where vehicle_id = %s "
-            "order by waybill_date desc nulls last, created_at desc limit 1",
+            "order by km_start desc nulls last, tank_start desc nulls last, id desc limit 1",
             (v["id"],),
         ).fetchone()
     v["last_km_end"] = (ls or {}).get("km_end")
@@ -603,7 +620,7 @@ def driver_waybills(user: dict = Depends(current_user)) -> list:
     """История путевых листов водителя (по его машине)."""
     plate = _driver_plate(user)
     with db() as conn:
-        return conn.execute(
+        rows = conn.execute(
             """
             select w.id, w.waybill_no, w.plate, w.created_at, w.waybill_date,
                    w.km_start, w.km_end, w.km_empty, w.km_loaded,
@@ -613,11 +630,14 @@ def driver_waybills(user: dict = Depends(current_user)) -> list:
             from waybills w
             join periods p on p.id = w.period_id
             where w.plate = %s
-            order by w.waybill_date desc nulls last, w.created_at desc
+            order by w.km_start desc nulls last, w.tank_start desc nulls last, w.id desc
             limit 200
             """,
             (plate,),
         ).fetchall()
+    for row in rows:
+        row["mark"] = waybill_mark(row)
+    return rows
 
 
 @app.post("/api/waybill/check")
@@ -841,7 +861,7 @@ def last_state(plate: str, user: dict = Depends(current_user)) -> dict:
             select waybill_no, km_end, tank_end, waybill_date, is_ok, is_corrected
             from waybills
             where plate = %s
-            order by waybill_date desc nulls last, created_at desc
+            order by km_start desc nulls last, tank_start desc nulls last, id desc
             limit 1
             """,
             (plate,),
@@ -922,7 +942,7 @@ def admin_report(period_id: int, user: dict = Depends(require_admin)) -> dict:
             left join app_users u on u.telegram_id = w.created_by_telegram_id
             left join vehicles v on v.id = w.vehicle_id
             where w.period_id = %s
-            order by w.plate, w.km_start
+            order by w.plate, w.km_start nulls last, w.tank_start nulls last, w.id
             """,
             (period_id,),
         ).fetchall()
@@ -962,6 +982,7 @@ def admin_report(period_id: int, user: dict = Depends(require_admin)) -> dict:
             "total_km": float(r["km_total_odo"]),
             "is_ok": r["is_ok"],
             "is_corrected": r["is_corrected"],
+            "mark": waybill_mark(r),
             "waybill_date": r["waybill_date"].isoformat() if r["waybill_date"] else None,
             "author": author,
             "created_at": r["created_at"].isoformat() if r["created_at"] else None,
@@ -1049,7 +1070,7 @@ def admin_export(
                 from waybills w
                 where w.vehicle_id = v.id
                   and w.waybill_date < %s
-                order by w.waybill_date desc nulls last, w.id desc
+                order by w.km_start desc nulls last, w.tank_start desc nulls last, w.id desc
                 limit 1
             ) ls on true
             where v.is_active
@@ -1143,11 +1164,11 @@ def admin_summary(period_id: int, user: dict = Depends(require_admin)) -> dict:
             raise HTTPException(status_code=404, detail="Период не найден")
         records = conn.execute(
             """
-            select id, plate, model, waybill_no, km_total_odo, fuel_in,
-                   fuel_spent, fuel_calc, is_ok, is_corrected
+            select id, plate, model, waybill_no, km_total_odo, km_empty, km_loaded,
+                   motohours, fuel_in, fuel_spent, fuel_calc, is_ok, is_corrected
             from waybills
             where period_id = %s
-            order by plate, created_at
+            order by plate, km_start nulls last, tank_start nulls last, id
             """,
             (period_id,),
         ).fetchall()
@@ -1176,6 +1197,7 @@ def admin_summary(period_id: int, user: dict = Depends(require_admin)) -> dict:
             "fuel_calc": float(r["fuel_calc"]),
             "is_ok": r["is_ok"],
             "is_corrected": r["is_corrected"],
+            "mark": waybill_mark(r),
         })
 
     def sort_key(p: str):
@@ -1392,7 +1414,7 @@ def admin_version(period_id: int, user: dict = Depends(require_admin)) -> dict:
 def admin_vehicle_waybills(plate: str, user: dict = Depends(require_admin)) -> list:
     """Все путевые конкретной машины (для карточки водителя и хронологии)."""
     with db() as conn:
-        return conn.execute(
+        rows = conn.execute(
             """
             select w.id, w.waybill_no, w.plate, w.created_at, w.waybill_date,
                    w.km_start, w.km_end, w.km_empty, w.km_loaded,
@@ -1402,11 +1424,14 @@ def admin_vehicle_waybills(plate: str, user: dict = Depends(require_admin)) -> l
             from waybills w
             join periods p on p.id = w.period_id
             where w.plate = %s
-            order by w.waybill_date desc nulls last, w.created_at desc
+            order by w.km_start desc nulls last, w.tank_start desc nulls last, w.id desc
             limit 200
             """,
             (plate,),
         ).fetchall()
+    for row in rows:
+        row["mark"] = waybill_mark(row)
+    return rows
 
 
 @app.get("/api/admin/waybill-check")
